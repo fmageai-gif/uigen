@@ -446,7 +446,6 @@ class RanBotApp:
                 self._do_scan(sct)
             except Exception as e:
                 self._log(f"Error: {e}")
-            time.sleep(self.cfg["scan_interval"])
 
     def _grab_frame(self, sct):
         region = self.cfg.get("region")
@@ -459,19 +458,23 @@ class RanBotApp:
         btn = self.cfg.get("click_button", "left")
         pyautogui.click(x, y, button=btn)
 
-    def _tag_still_alive(self, sct, screen_x, screen_y, name, tolerance=40):
-        """Re-scan and check if a name tag is still near the expected position."""
+    def _find_target_still_alive(self, sct, tag_sx, tag_sy, name, tolerance=50):
+        """Return updated click position if tag still visible, else None."""
         frame, region = self._grab_frame(sct)
         tags = find_red_name_tags(frame, self.cfg)
         offset_x = region["left"] if region else 0
         offset_y = region["top"] if region else 0
+        best = None
+        best_dist = tolerance
         for (cx, cy, text, _) in tags:
             sx = cx + offset_x
             sy = cy + offset_y
-            if abs(sx - screen_x) < tolerance and abs(sy - screen_y) < tolerance:
-                if not HAS_OCR or not name or name.lower() in text.lower():
-                    return True
-        return False
+            dist = ((sx - tag_sx) ** 2 + (sy - tag_sy) ** 2) ** 0.5
+            if dist < best_dist:
+                if not HAS_OCR or not name or name.lower() in text.lower() or not text:
+                    best_dist = dist
+                    best = (sx, sy + self.cfg["click_offset_y"])
+        return best
 
     def _do_scan(self, sct):
         frame, region = self._grab_frame(sct)
@@ -481,50 +484,61 @@ class RanBotApp:
         offset_x = region["left"] if region else 0
         offset_y = region["top"] if region else 0
 
-        self.root.after(0, lambda n=len(tags): self.status_var.set(f"Running — {n} red tag(s) detected"))
+        self.root.after(0, lambda n=len(tags): self.status_var.set(
+            f"Running — {n} red tag(s) found" if tags else "Running — scanning..."))
 
-        # Find the first matching mob and kill it before moving on
-        for (cx, cy, text, rect) in tags:
-            match = False
-            if HAS_OCR and text:
-                for mob in selected:
-                    if mob in text.lower():
-                        match = True
-                        break
-            else:
-                match = True  # no OCR — attack all red tags
-
-            if not match:
-                continue
-
-            screen_x = cx + offset_x
-            screen_y = cy + self.cfg["click_offset_y"] + offset_y
-            name_display = text if text else "mob"
-            btn = self.cfg.get("click_button", "left")
-
-            self._log(f"Targeting '{name_display}' — {btn}-clicking until dead...")
-            self.root.after(0, lambda n=name_display: self.status_var.set(f"Attacking: {n}"))
-
-            # Initial click to target
-            self._do_click(screen_x, screen_y)
-            time.sleep(self.cfg["attack_interval"])
-
-            # Keep attacking until name tag disappears or timeout
-            deadline = time.time() + self.cfg["death_timeout"]
-            while self.running and time.time() < deadline:
-                if not self._tag_still_alive(sct, cx + offset_x, cy + offset_y, text):
-                    self._log(f"'{name_display}' is dead — looking for next target")
-                    break
-                self._do_click(screen_x, screen_y)
-                time.sleep(self.cfg["attack_interval"])
-            else:
-                if self.running:
-                    self._log(f"Timeout on '{name_display}' — moving to next target")
-
-            # Only attack one mob per scan cycle; re-scan for next target
+        if not tags:
+            time.sleep(self.cfg["scan_interval"])
             return
 
-        self.root.after(0, lambda: self.status_var.set("Running — scanning for mobs..."))
+        # Filter to selected monsters only
+        matched = []
+        for (cx, cy, text, rect) in tags:
+            if HAS_OCR and text:
+                if any(mob in text.lower() for mob in selected):
+                    matched.append((cx, cy, text, rect))
+            else:
+                matched.append((cx, cy, text, rect))  # no OCR — target all red tags
+
+        if not matched:
+            time.sleep(self.cfg["scan_interval"])
+            return
+
+        # Sort by distance to center of screen (closest to player first)
+        frame_cx = frame.shape[1] // 2
+        frame_cy = frame.shape[0] // 2
+        matched.sort(key=lambda t: (t[0] - frame_cx) ** 2 + (t[1] - frame_cy) ** 2)
+
+        cx, cy, text, rect = matched[0]
+        tag_sx = cx + offset_x          # screen coords of name tag
+        tag_sy = cy + offset_y
+        click_x = tag_sx                # click horizontally on center of tag
+        click_y = tag_sy + self.cfg["click_offset_y"]  # click below tag = mob body
+        name_display = text if text else "mob"
+        btn = self.cfg.get("click_button", "left")
+
+        self._log(f"Locked onto '{name_display}' at tag({tag_sx},{tag_sy}) → clicking body({click_x},{click_y})")
+        self.root.after(0, lambda n=name_display: self.status_var.set(f"Attacking: {n}"))
+
+        # Click to target first
+        self._do_click(click_x, click_y)
+        time.sleep(self.cfg["attack_interval"])
+
+        # Keep attacking same target until it dies — do NOT switch
+        deadline = time.time() + self.cfg["death_timeout"]
+        while self.running and time.time() < deadline:
+            alive_pos = self._find_target_still_alive(sct, tag_sx, tag_sy, text)
+            if alive_pos is None:
+                self._log(f"'{name_display}' is dead! Scanning for next target...")
+                time.sleep(0.3)
+                break
+            # Update click position in case mob moved slightly
+            click_x, click_y = alive_pos
+            self._do_click(click_x, click_y)
+            time.sleep(self.cfg["attack_interval"])
+        else:
+            if self.running:
+                self._log(f"Timeout on '{name_display}' — moving to next")
 
     def _test_scan(self):
         """Take one screenshot, find red tags, log results and move mouse to each."""
