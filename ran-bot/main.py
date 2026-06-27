@@ -18,12 +18,23 @@ import pyautogui
 
 try:
     import pytesseract
-    # Point to the default Tesseract install path on Windows
     if sys.platform == "win32":
-        import os
-        tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        if os.path.exists(tesseract_path):
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        # Search common install locations
+        _candidates = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            r"C:\Users\Administrator\AppData\Local\Programs\Tesseract-OCR\tesseract.exe",
+            r"C:\Tesseract-OCR\tesseract.exe",
+        ]
+        # Also search PATH
+        import shutil
+        _from_path = shutil.which("tesseract")
+        if _from_path:
+            _candidates.insert(0, _from_path)
+        for _p in _candidates:
+            if os.path.exists(_p):
+                pytesseract.pytesseract.tesseract_cmd = _p
+                break
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
@@ -391,7 +402,9 @@ class RanBotApp:
         self.btn_start.config(text="■  STOP FARMING", bg="#4a1a1a", fg="#ff4444")
         self.status_var.set("Running — scanning for mobs...")
         self._log(f"Started farming: {', '.join(selected)}")
-        if not HAS_OCR:
+        if HAS_OCR:
+            self._log(f"Tesseract: {pytesseract.pytesseract.tesseract_cmd}")
+        else:
             self._log("⚠ pytesseract not found — name detection disabled, using color only")
         save_config(self.cfg)
         self.scan_thread = threading.Thread(target=self._scan_loop, daemon=True)
