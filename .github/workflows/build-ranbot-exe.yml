@@ -1,0 +1,39 @@
+name: Build RanBot EXE
+
+on:
+  push:
+    branches:
+      - claude/ran-online-auto-target-mobs-qphqvj
+    paths:
+      - 'ran-bot/**'
+      - '.github/workflows/build-ranbot-exe.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller mss opencv-python numpy pyautogui pytesseract Pillow
+
+      - name: Build EXE
+        working-directory: ran-bot
+        run: |
+          pyinstaller --onefile --windowed --name RanBot --icon=NONE main.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RanBot-Windows
+          path: ran-bot/dist/RanBot.exe
+          retention-days: 30
