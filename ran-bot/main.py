@@ -18,6 +18,12 @@ import pyautogui
 
 try:
     import pytesseract
+    # Point to the default Tesseract install path on Windows
+    if sys.platform == "win32":
+        import os
+        tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.exists(tesseract_path):
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
