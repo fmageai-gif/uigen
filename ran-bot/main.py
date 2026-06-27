@@ -373,9 +373,14 @@ class RanBotApp:
     def _capture_br(self):
         br = pyautogui.position()
         tl = self._tl
+        # Ensure top-left is actually the smaller coordinate
+        left   = min(tl.x, br.x)
+        top    = min(tl.y, br.y)
+        width  = abs(br.x - tl.x)
+        height = abs(br.y - tl.y)
         self.cfg["region"] = {
-            "left": tl.x, "top": tl.y,
-            "width": br.x - tl.x, "height": br.y - tl.y
+            "left": left, "top": top,
+            "width": width, "height": height
         }
         self.region_label.config(text=self._region_text())
         save_config(self.cfg)
