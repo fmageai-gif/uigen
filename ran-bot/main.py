@@ -56,7 +56,7 @@ DEFAULT_MONSTERS = [
 DEFAULT_CONFIG = {
     "scan_interval": 0.5,       # seconds between scans
     "attack_interval": 0.4,     # seconds between each attack click on current target
-    "click_offset_y": 60,       # pixels below name tag to click (mob body)
+    "click_offset_y": 50,       # pixels below BOTTOM of name tag to click (mob body)
     "death_timeout": 10,        # seconds to wait before assuming mob is dead/gone
     "click_button": "left",     # "left" or "right" mouse button for attacking
     "red_lower": [0, 120, 100], # HSV lower bound for red name tags
@@ -473,7 +473,7 @@ class RanBotApp:
             if dist < best_dist:
                 if not HAS_OCR or not name or name.lower() in text.lower() or not text:
                     best_dist = dist
-                    best = (sx, sy + self.cfg["click_offset_y"])
+                    best = (sx, sy + self.cfg["click_offset_y"] + 8)
         return best
 
     def _do_scan(self, sct):
@@ -510,10 +510,12 @@ class RanBotApp:
         matched.sort(key=lambda t: (t[0] - frame_cx) ** 2 + (t[1] - frame_cy) ** 2)
 
         cx, cy, text, rect = matched[0]
-        tag_sx = cx + offset_x          # screen coords of name tag
+        rx, ry, rw, rh = rect
+        tag_sx = cx + offset_x                        # screen coords of name tag center
         tag_sy = cy + offset_y
-        click_x = tag_sx                # click horizontally on center of tag
-        click_y = tag_sy + self.cfg["click_offset_y"]  # click below tag = mob body
+        tag_bottom_sy = (ry + rh) + offset_y          # screen coords of name tag bottom edge
+        click_x = tag_sx                              # horizontally centered on the name tag
+        click_y = tag_bottom_sy + self.cfg["click_offset_y"]  # below the tag = mob body
         name_display = text if text else "mob"
         btn = self.cfg.get("click_button", "left")
 
