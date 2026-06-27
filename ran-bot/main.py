@@ -38,8 +38,10 @@ DEFAULT_MONSTERS = [
 
 DEFAULT_CONFIG = {
     "scan_interval": 0.5,       # seconds between scans
-    "click_delay": 0.3,         # seconds between clicks
+    "attack_interval": 0.4,     # seconds between each attack click on current target
     "click_offset_y": 30,       # pixels below name tag to click (mob body)
+    "death_timeout": 10,        # seconds to wait before assuming mob is dead/gone
+    "click_button": "left",     # "left" or "right" mouse button for attacking
     "red_lower": [0, 120, 100], # HSV lower bound for red name tags
     "red_upper": [8, 255, 255], # HSV upper bound for red name tags
     "min_area": 100,            # minimum contour area to consider
@@ -221,8 +223,23 @@ class RanBotApp:
             return var
 
         row(frame_cfg, "Scan interval (sec):", "scan_interval")
-        row(frame_cfg, "Click delay (sec):", "click_delay")
+        row(frame_cfg, "Attack interval (sec):", "attack_interval")
         row(frame_cfg, "Click Y offset (px):", "click_offset_y")
+        row(frame_cfg, "Death timeout (sec):", "death_timeout")
+
+        # Click button selector
+        f_click = tk.Frame(frame_cfg, bg=bg)
+        f_click.pack(fill="x", padx=8, pady=(2, 6))
+        tk.Label(f_click, text="Attack click type:", bg=bg, fg="#8899bb",
+                 font=("Courier New", 9), width=22, anchor="w").pack(side="left")
+        self.click_btn_var = tk.StringVar(value=self.cfg.get("click_button", "left"))
+        for label, val in [("Left Click", "left"), ("Right Click", "right")]:
+            tk.Radiobutton(
+                f_click, text=label, variable=self.click_btn_var, value=val,
+                bg=bg, fg=fg, selectcolor="#1a2a4a", activebackground=bg,
+                font=("Courier New", 9),
+                command=lambda: self._set_click_button(self.click_btn_var.get())
+            ).pack(side="left", padx=6)
 
         # Region selector
         f_region = tk.Frame(frame_cfg, bg=bg)
@@ -288,6 +305,10 @@ class RanBotApp:
             self.cfg[key] = val
         except ValueError:
             pass
+
+    def _set_click_button(self, val):
+        self.cfg["click_button"] = val
+        save_config(self.cfg)
 
     def _save_selected(self):
         self.cfg["selected_monsters"] = [n for n, v in self.monster_vars.items() if v.get()]
@@ -395,51 +416,81 @@ class RanBotApp:
                 self._log(f"Error: {e}")
             time.sleep(self.cfg["scan_interval"])
 
-    def _do_scan(self, sct):
+    def _grab_frame(self, sct):
         region = self.cfg.get("region")
-        monitor = region if region else sct.monitors[1]  # monitors[1] = primary screen
-
+        monitor = region if region else sct.monitors[1]
         screenshot = sct.grab(monitor)
         frame = np.array(screenshot)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR), region
 
+    def _do_click(self, x, y):
+        btn = self.cfg.get("click_button", "left")
+        pyautogui.click(x, y, button=btn)
+
+    def _tag_still_alive(self, sct, screen_x, screen_y, name, tolerance=40):
+        """Re-scan and check if a name tag is still near the expected position."""
+        frame, region = self._grab_frame(sct)
+        tags = find_red_name_tags(frame, self.cfg)
+        offset_x = region["left"] if region else 0
+        offset_y = region["top"] if region else 0
+        for (cx, cy, text, _) in tags:
+            sx = cx + offset_x
+            sy = cy + offset_y
+            if abs(sx - screen_x) < tolerance and abs(sy - screen_y) < tolerance:
+                if not HAS_OCR or not name or name.lower() in text.lower():
+                    return True
+        return False
+
+    def _do_scan(self, sct):
+        frame, region = self._grab_frame(sct)
         tags = find_red_name_tags(frame, self.cfg)
 
         selected = [n.lower() for n, v in self.monster_vars.items() if v.get()]
         offset_x = region["left"] if region else 0
         offset_y = region["top"] if region else 0
 
-        clicked = 0
+        # Find the first matching mob and kill it before moving on
         for (cx, cy, text, rect) in tags:
             match = False
-
             if HAS_OCR and text:
                 for mob in selected:
                     if mob in text.lower():
                         match = True
                         break
             else:
-                # Without OCR, click all red name tags
-                match = True
+                match = True  # no OCR — attack all red tags
 
-            if match:
-                # Convert from frame coords to screen coords
-                screen_x = cx + offset_x
-                screen_y = cy + self.cfg["click_offset_y"] + offset_y
+            if not match:
+                continue
 
-                pyautogui.click(screen_x, screen_y)
-                name_display = text if text else "unknown"
-                self._log(f"Clicked mob '{name_display}' at ({screen_x}, {screen_y})")
-                clicked += 1
-                time.sleep(self.cfg["click_delay"])
+            screen_x = cx + offset_x
+            screen_y = cy + self.cfg["click_offset_y"] + offset_y
+            name_display = text if text else "mob"
+            btn = self.cfg.get("click_button", "left")
 
-                if not self.running:
+            self._log(f"Targeting '{name_display}' — {btn}-clicking until dead...")
+            self.root.after(0, lambda n=name_display: self.status_var.set(f"Attacking: {n}"))
+
+            # Initial click to target
+            self._do_click(screen_x, screen_y)
+            time.sleep(self.cfg["attack_interval"])
+
+            # Keep attacking until name tag disappears or timeout
+            deadline = time.time() + self.cfg["death_timeout"]
+            while self.running and time.time() < deadline:
+                if not self._tag_still_alive(sct, cx + offset_x, cy + offset_y, text):
+                    self._log(f"'{name_display}' is dead — looking for next target")
                     break
+                self._do_click(screen_x, screen_y)
+                time.sleep(self.cfg["attack_interval"])
+            else:
+                if self.running:
+                    self._log(f"Timeout on '{name_display}' — moving to next target")
 
-        if clicked == 0:
-            self.root.after(0, lambda: self.status_var.set("Running — no mobs found, scanning..."))
-        else:
-            self.root.after(0, lambda c=clicked: self.status_var.set(f"Running — clicked {c} mob(s)"))
+            # Only attack one mob per scan cycle; re-scan for next target
+            return
+
+        self.root.after(0, lambda: self.status_var.set("Running — scanning for mobs..."))
 
     def _on_close(self):
         self._stop()
