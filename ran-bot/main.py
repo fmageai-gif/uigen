@@ -56,7 +56,7 @@ DEFAULT_MONSTERS = [
 DEFAULT_CONFIG = {
     "scan_interval": 0.5,       # seconds between scans
     "attack_interval": 0.4,     # seconds between each attack click on current target
-    "click_offset_y": 30,       # pixels below name tag to click (mob body)
+    "click_offset_y": 60,       # pixels below name tag to click (mob body)
     "death_timeout": 10,        # seconds to wait before assuming mob is dead/gone
     "click_button": "left",     # "left" or "right" mouse button for attacking
     "red_lower": [0, 120, 100], # HSV lower bound for red name tags
@@ -282,7 +282,15 @@ class RanBotApp:
             cursor="hand2", pady=8,
             command=self._toggle
         )
-        self.btn_start.pack(fill="x", padx=12, pady=(4, 4))
+        self.btn_start.pack(fill="x", padx=12, pady=(4, 2))
+
+        tk.Button(
+            self.root, text="🔍  TEST SCAN (see what bot detects)",
+            bg="#1a2a3a", fg="#88aaff",
+            font=("Courier New", 9), relief="flat",
+            cursor="hand2", pady=4,
+            command=self._test_scan
+        ).pack(fill="x", padx=12, pady=(0, 4))
 
         # Status
         tk.Label(self.root, textvariable=self.status_var,
@@ -473,6 +481,8 @@ class RanBotApp:
         offset_x = region["left"] if region else 0
         offset_y = region["top"] if region else 0
 
+        self.root.after(0, lambda n=len(tags): self.status_var.set(f"Running — {n} red tag(s) detected"))
+
         # Find the first matching mob and kill it before moving on
         for (cx, cy, text, rect) in tags:
             match = False
@@ -515,6 +525,33 @@ class RanBotApp:
             return
 
         self.root.after(0, lambda: self.status_var.set("Running — scanning for mobs..."))
+
+    def _test_scan(self):
+        """Take one screenshot, find red tags, log results and move mouse to each."""
+        self._log("--- TEST SCAN ---")
+        time.sleep(1)  # give user time to switch to game window
+        with mss.mss() as sct:
+            frame, region = self._grab_frame(sct)
+        tags = find_red_name_tags(frame, self.cfg)
+        offset_x = region["left"] if region else 0
+        offset_y = region["top"] if region else 0
+
+        if not tags:
+            self._log("No red name tags found! Try using Full Screen mode.")
+            return
+
+        self._log(f"Found {len(tags)} red tag(s):")
+        for i, (cx, cy, text, rect) in enumerate(tags):
+            screen_x = cx + offset_x
+            screen_y = cy + self.cfg["click_offset_y"] + offset_y
+            self._log(f"  [{i+1}] name='{text}' tag=({cx+offset_x},{cy+offset_y}) click=({screen_x},{screen_y})")
+            # Move mouse (don't click) to show where it would click
+            try:
+                pyautogui.moveTo(screen_x, screen_y, duration=0.3)
+                time.sleep(0.5)
+            except Exception:
+                pass
+        self._log("--- END TEST SCAN ---")
 
     def _on_close(self):
         self._stop()
