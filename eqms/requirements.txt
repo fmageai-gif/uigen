@@ -1,0 +1,23 @@
+# HP Mainstream EQMS — runtime dependencies
+# Python 3.13+ required. Pinned to compatible minimum versions; use a fresh
+# virtual environment:  py -3.13 -m venv .venv
+
+# --- Desktop UI ---
+customtkinter>=5.2.2
+darkdetect>=0.8.0           # OS dark/light detection used by CustomTkinter
+pillow>=10.3.0              # image handling for icons/branding
+
+# --- Excel / data ---
+openpyxl>=3.1.2
+pandas>=2.2.2
+
+# --- Microsoft 365 / SharePoint / Graph ---
+Office365-REST-Python-Client>=2.5.11
+msal>=1.28.0
+requests>=2.32.0
+
+# --- Charting ---
+matplotlib>=3.8.4
+
+# --- Packaging (build-time only, kept here for a single install step) ---
+pyinstaller>=6.6.0

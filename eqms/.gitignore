@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# PyInstaller build artefacts
+build/
+dist/
+*.manifest
+
+# Local runtime data (never commit user data / tokens / caches)
+*.sqlite
+token_cache.bin
+local_config.json
+logs.txt
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
