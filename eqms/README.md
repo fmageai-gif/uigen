@@ -62,11 +62,20 @@ using a local Excel store under `%LOCALAPPDATA%\HP-Mainstream-EQMS`, so you can
 explore everything immediately. Sign in with your `@concentrix.com` email via
 "Continue offline", or use "Sign in with Microsoft 365" for the real flow.
 
-## Build the executable
+## Get the executable
+
+**Download the prebuilt `.exe` (no build, no install needed)** — the
+*Build EQMS Windows EXE* GitHub Action builds a single self-contained
+`HP-Mainstream-EQMS.exe` on every push and on each release. Grab it from the
+workflow run's **Artifacts** section (`HP-Mainstream-EQMS-exe`), or from the
+**Releases** page once a version is tagged. Just download and run — Python is
+**not** required on the machine.
+
+**Build it yourself:**
 
 ```bash
 python scripts/build.py --clean      # or run scripts\build.bat on Windows
-# -> dist\HP-Mainstream-EQMS.exe
+# -> dist\HP-Mainstream-EQMS.exe   (single file, runs with nothing installed)
 ```
 
 See [`docs/PACKAGING.md`](docs/PACKAGING.md) for full details.
