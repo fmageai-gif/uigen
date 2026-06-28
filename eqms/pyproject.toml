@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hp-mainstream-eqms"
+version = "1.0.0"
+description = "HP Mainstream Enterprise Quality Management System (EQMS) — desktop app for Short Call Audits"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "HP Mainstream Quality Assurance" }]
+keywords = ["quality", "audit", "sharepoint", "desktop", "customtkinter"]
+
+dependencies = [
+    "customtkinter>=5.2.2",
+    "darkdetect>=0.8.0",
+    "pillow>=10.3.0",
+    "openpyxl>=3.1.2",
+    "pandas>=2.2.2",
+    "Office365-REST-Python-Client>=2.5.11",
+    "msal>=1.28.0",
+    "requests>=2.32.0",
+    "matplotlib>=3.8.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyinstaller>=6.6.0"]
+
+[project.gui-scripts]
+eqms = "eqms.__main__:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
