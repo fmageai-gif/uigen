@@ -13,10 +13,13 @@ the system of record**, authenticates with **Microsoft 365**, and ships as a
 
 ## Highlights
 
-- **Microsoft 365 sign-in** (MSAL device-code flow) with a built-in offline mode
-  for development and demos.
-- **Excel-on-SharePoint** storage with automatic retry to survive file locking;
-  a local SQLite cache keeps the dashboard fast and works offline.
+- **Simple work-email sign-in** — no Microsoft 365 dependency (it is blocked in
+  this environment), so it runs anywhere.
+- **Excel database** stored in a folder you choose — local to the PC or a
+  **shared network folder** so the whole QA team uses one database; a local
+  SQLite cache keeps the dashboard fast.
+- **Resilient masterlist import** — auto-detects the right sheet/header row in
+  large multi-sheet workbooks and maps organisation-specific column names.
 - **Audit form** with agent autocomplete + auto-fill (EID/TL/OM/Queue/LOB/
   emails), cascading Valid/Invalid → reason lists, mandatory remarks and
   Case + Genesys uniqueness.

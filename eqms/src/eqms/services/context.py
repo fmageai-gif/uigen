@@ -39,11 +39,16 @@ class AppContext:
 
     def __init__(self, session: SessionManager | None = None):
         self.session = session or get_session()
+        self.cache = LocalCache()
+        self._worker: BackgroundWorker | None = None
+        self._wire()
+
+    def _wire(self) -> None:
+        """(Re)build repositories and services against the active store."""
         self.store = get_store()
 
         # Repositories (shared instances so caches are coherent).
         self.settings = SettingsStore(self.store)
-        self.cache = LocalCache()
         self.logs = LogsRepository(self.store)
         self.masterlist = MasterlistRepository(self.store)
         self.audits = AuditRepository(self.store)
@@ -67,7 +72,18 @@ class AppContext:
         )
         self.update_service = UpdateService(self.settings)
 
-        self._worker: BackgroundWorker | None = None
+    def rebind_store(self) -> None:
+        """Repoint every repository/service at the (newly selected) store.
+
+        Called after the administrator changes the database folder. Rebuilds the
+        data/service layer against :func:`get_store` and reseeds configuration in
+        the new location.
+        """
+        self._wire()
+        self.settings.ensure_seeded()
+        self.masterlist.refresh()
+        self.audits.refresh()
+        _log.info("AppContext rebound to store at %s", self.store.backend_name)
 
     # -- lifecycle ----------------------------------------------------------
 

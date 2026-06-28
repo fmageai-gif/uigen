@@ -6,15 +6,13 @@ Audits.
 ## 1. Signing in
 
 1. Launch **HP-Mainstream-EQMS.exe**.
-2. Click **Sign in with Microsoft 365**.
-3. A code and a link appear — open the link in your browser, enter the code and
-   complete sign-in with your `@concentrix.com` account.
-4. The app remembers you; next time it signs you in silently.
+2. Enter your **work email** (e.g. `your.name@concentrix.com`) and click
+   **Sign in** (or press Enter).
 
-> No tenant configured yet? Use **Continue offline** with your work email to
-> explore the app against a local data store.
-
-Your name and role (**QA Analyst**) appear at the bottom of the sidebar.
+That's it — the app runs entirely against the Excel database (Microsoft 365 is
+not used). Your name and role (**QA Analyst**) appear at the bottom of the
+sidebar. Whether the database is a folder on this PC or a shared network folder
+is set by your administrator (Admin Center → Database).
 
 ## 2. The dashboard
 
@@ -37,6 +35,7 @@ Open **New Audit** and complete the form:
 |-------|-------|
 | **Agent** | Start typing the name or EID and pick from the dropdown. |
 | Agent EID, Team Leader, Operations Manager, Queue, LOB, TL/OM Email | **Auto-filled** from the masterlist when you select an agent. |
+| **Auditor Name** | The person performing the audit. Pre-filled with your name; editable. **Required.** |
 | **Date** | Defaults to today; editable. |
 | **Case Number** | Required. |
 | **Genesys Transaction ID** | Required. |

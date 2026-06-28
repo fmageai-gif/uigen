@@ -88,7 +88,57 @@ def ensure_directories() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Workbook names (the system of record on SharePoint)
+# Local connection config (storage location). Kept in a small JSON file rather
+# than Settings.xlsx so it can be read *before* the store exists (Settings is
+# itself stored in the store), avoiding a chicken-and-egg dependency.
+# ---------------------------------------------------------------------------
+
+def read_local_config() -> dict:
+    """Return the bootstrap local config dict (``{}`` if absent/invalid)."""
+    import json
+
+    try:
+        if LOCAL_CONFIG_PATH.exists():
+            return json.loads(LOCAL_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # pragma: no cover - corrupt file
+        pass
+    return {}
+
+
+def write_local_config(values: dict) -> None:
+    """Merge ``values`` into the local config JSON file."""
+    import json
+
+    ensure_directories()
+    current = read_local_config()
+    current.update(values)
+    LOCAL_CONFIG_PATH.write_text(
+        json.dumps(current, indent=2), encoding="utf-8"
+    )
+
+
+def get_storage_path() -> Path:
+    """Return the folder that holds the Excel database (the system of record).
+
+    Defaults to the per-user local store, but the administrator can point this
+    at a shared network folder so a whole QA team uses one database. The value
+    is read from ``local_config.json`` (key ``storage_path``).
+    """
+    configured = read_local_config().get("storage_path", "").strip()
+    if configured:
+        path = Path(configured)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    return LOCAL_STORE_DIR
+
+
+def set_storage_path(path: str) -> None:
+    """Persist the database folder location to local config."""
+    write_local_config({"storage_path": (path or "").strip()})
+
+
+# ---------------------------------------------------------------------------
+# Workbook names (the system of record — Excel files in the storage folder)
 # ---------------------------------------------------------------------------
 
 WORKBOOK_AUDIT_DB = "AuditDatabase.xlsx"

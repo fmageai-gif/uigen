@@ -71,6 +71,7 @@ def make_audit():
             date=today_iso(),
             qa_name="QA User",
             qa_email="qa.user@concentrix.com",
+            auditor_name="QA User",
             agent="John Smith",
             agent_eid="E100",
             team_leader="Lead A",

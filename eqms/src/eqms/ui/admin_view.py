@@ -52,7 +52,7 @@ class AdminView(ctk.CTkFrame):
         self.tabs.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 16))
 
         for name in ("General", "Branding & Theme", "Audit Reasons",
-                     "Validation", "Widgets", "Email", "SharePoint",
+                     "Validation", "Widgets", "Email", "Database",
                      "Backups & Updates", "Masterlist", "Logs",
                      "Archive", "Export"):
             self.tabs.add(name)
@@ -63,7 +63,7 @@ class AdminView(ctk.CTkFrame):
         self._build_validation(self.tabs.tab("Validation"))
         self._build_widgets(self.tabs.tab("Widgets"))
         self._build_email(self.tabs.tab("Email"))
-        self._build_sharepoint(self.tabs.tab("SharePoint"))
+        self._build_database(self.tabs.tab("Database"))
         self._build_backups_updates(self.tabs.tab("Backups & Updates"))
         self._build_masterlist(self.tabs.tab("Masterlist"))
         self._build_logs(self.tabs.tab("Logs"))
@@ -248,19 +248,61 @@ class AdminView(ctk.CTkFrame):
                       hover_color=self.palette.primary_hover, command=save).grid(
             row=5, column=0, sticky="w", padx=10, pady=12)
 
-    def _build_sharepoint(self, tab) -> None:
-        self._bool_row(tab, "Use SharePoint storage", "sharepoint.enabled", 0)
-        self._scalar_row(tab, "Site URL", "sharepoint.site_url", 1,
-                         hint="https://org.sharepoint.com/sites/QA")
-        self._scalar_row(tab, "Folder path", "sharepoint.folder_path", 2,
-                         hint="Shared Documents/EQMS")
+    def _build_database(self, tab) -> None:
+        from .. import config
+
+        ctk.CTkLabel(tab, text="Excel database location",
+                     font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color=self.palette.text).grid(
+            row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 2))
         ctk.CTkLabel(
-            tab, text="Changes take effect after sign-out / restart.",
-            text_color=self.palette.text_muted,
-            font=ctk.CTkFont(size=11)).grid(row=3, column=0, columnspan=2,
-                                            sticky="w", padx=10, pady=6)
-        self._save_button(tab, 4, ["sharepoint.enabled", "sharepoint.site_url",
-                                   "sharepoint.folder_path"])
+            tab, justify="left", text_color=self.palette.text_muted,
+            font=ctk.CTkFont(size=11), wraplength=620,
+            text=("All audits are saved to Excel workbooks in this folder "
+                  "(AuditDatabase.xlsx, Masterlist.xlsx, Archive.xlsx, "
+                  "Settings.xlsx, SystemLogs.xlsx). Point it at a shared network "
+                  "folder so the whole QA team uses one database, or leave it "
+                  "local to this PC."),
+        ).grid(row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(tab, text="Database folder",
+                     text_color=self.palette.text).grid(
+            row=2, column=0, sticky="w", padx=10, pady=6)
+        self._db_path_var = ctk.StringVar(value=str(config.get_storage_path()))
+        ctk.CTkEntry(tab, textvariable=self._db_path_var, width=440).grid(
+            row=2, column=1, sticky="w", padx=10, pady=6)
+        ctk.CTkButton(tab, text="Browse…", width=90, fg_color=self.palette.accent,
+                      command=self._browse_db_folder).grid(row=2, column=2, padx=6)
+
+        ctk.CTkButton(tab, text="Save & switch", fg_color=self.palette.primary,
+                      hover_color=self.palette.primary_hover,
+                      command=self._save_db_path).grid(
+            row=3, column=0, sticky="w", padx=10, pady=12)
+        self._db_status = ctk.CTkLabel(tab, text="", text_color=self.palette.text_muted)
+        self._db_status.grid(row=3, column=1, sticky="w", padx=10)
+
+    def _browse_db_folder(self) -> None:
+        folder = filedialog.askdirectory(title="Select the database folder")
+        if folder:
+            self._db_path_var.set(folder)
+
+    def _save_db_path(self) -> None:
+        from .. import config
+        from ..sharepoint import factory
+
+        new_path = self._db_path_var.get().strip()
+        try:
+            config.set_storage_path(new_path)
+            factory.reset_store()           # next access reopens at the new path
+            self.ctx.rebind_store()          # repoint repositories + reseed
+            self.ctx.logs.record("DATABASE_LOCATION_CHANGED",
+                                 user=self.ctx.session.user.email,
+                                 details=new_path or "(default local)")
+            self._db_status.configure(text="Saved. Database now at this folder.")
+            self._toast.show("Database location updated", "success")
+        except Exception as exc:  # noqa: BLE001
+            self._toast.show(f"Could not switch database: {exc}", "error",
+                             duration=6000)
 
     def _build_backups_updates(self, tab) -> None:
         self._bool_row(tab, "Automatic backups", "backup.enabled", 0)
@@ -316,17 +358,19 @@ class AdminView(ctk.CTkFrame):
 
         def run():
             try:
-                count = self.ctx.masterlist.replace_from_file(path)
+                result = self.ctx.masterlist.replace_from_file(path)
+                count = len(result.agents)
                 self.ctx.logs.record("MASTERLIST_UPLOADED",
                                      user=self.ctx.session.user.email,
-                                     details=f"{count} agents")
+                                     details=result.summary())
                 self.after(0, lambda: self._ml_status.configure(
-                    text=f"Current agents: {count}"))
+                    text=f"Current agents: {count}   ({result.summary()})"))
                 self.after(0, lambda: self._toast.show(
-                    f"Imported {count} agents", "success"))
+                    f"Imported {count} agents from '{result.sheet}'", "success"))
             except Exception as exc:  # noqa: BLE001
+                msg = str(exc)
                 self.after(0, lambda: self._toast.show(
-                    f"Import failed: {exc}", "error", duration=5000))
+                    f"Import failed: {msg}", "error", duration=6000))
         threading.Thread(target=run, daemon=True).start()
 
     def _build_logs(self, tab) -> None:

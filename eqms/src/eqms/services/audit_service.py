@@ -85,6 +85,8 @@ class AuditService:
 
     def validate(self, audit: Audit, *, is_update: bool = False) -> None:
         """Validate an audit against the configurable rule set. Raises on error."""
+        if not audit.auditor_name.strip():
+            raise ValidationError("Auditor Name is required.", field="auditor_name")
         if not audit.agent.strip():
             raise ValidationError("Agent is required.", field="agent")
         if not audit.case_number.strip():

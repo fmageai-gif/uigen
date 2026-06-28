@@ -13,7 +13,7 @@ from typing import Callable
 import customtkinter as ctk
 
 from .. import APP_NAME, __version__
-from ..auth.ms_auth import GraphAuthProvider, LocalAuthProvider
+from ..auth.ms_auth import LocalAuthProvider
 from ..auth.session import SessionManager
 from ..core.logging_config import get_logger
 from ..core.models import User
@@ -57,27 +57,21 @@ class LoginView(ctk.CTkFrame):
             font=ctk.CTkFont(size=12),
         ).pack(padx=48, pady=(0, 24))
 
-        # Microsoft 365 sign-in button.
-        self.ms_button = ctk.CTkButton(
-            card, text="Sign in with Microsoft 365", height=44, width=320,
-            fg_color=palette.primary, hover_color=palette.primary_hover,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            command=self._sign_in_m365,
-        )
-        self.ms_button.pack(padx=48, pady=(0, 16))
-
-        # Offline / local sign-in (development & no-tenant environments).
-        ctk.CTkLabel(card, text="— or work offline —",
+        # Sign-in with work email (the only sign-in path; Microsoft 365 is not
+        # used because it is blocked in this environment).
+        ctk.CTkLabel(card, text="Sign in with your work email",
                      text_color=palette.text_muted,
-                     font=ctk.CTkFont(size=11)).pack(pady=(0, 8))
+                     font=ctk.CTkFont(size=12)).pack(pady=(0, 8))
         self.email_entry = ctk.CTkEntry(
-            card, placeholder_text="your.name@concentrix.com", width=320, height=38
+            card, placeholder_text="your.name@concentrix.com", width=320, height=40
         )
-        self.email_entry.pack(padx=48, pady=(0, 8))
+        self.email_entry.pack(padx=48, pady=(0, 12))
+        self.email_entry.bind("<Return>", lambda e: self._sign_in_local())
         self.local_button = ctk.CTkButton(
-            card, text="Continue offline", height=38, width=320,
-            fg_color="transparent", border_width=1, border_color=palette.primary,
-            text_color=palette.primary, hover_color=palette.surface_alt,
+            card, text="Sign in", height=44, width=320,
+            fg_color=palette.primary, hover_color=palette.primary_hover,
+            text_color="#FFFFFF",
+            font=ctk.CTkFont(size=14, weight="bold"),
             command=self._sign_in_local,
         )
         self.local_button.pack(padx=48, pady=(0, 16))
@@ -95,14 +89,8 @@ class LoginView(ctk.CTkFrame):
 
     def _set_busy(self, busy: bool, message: str = "") -> None:
         state = "disabled" if busy else "normal"
-        self.ms_button.configure(state=state)
         self.local_button.configure(state=state)
         self.status.configure(text=message)
-
-    def _sign_in_m365(self) -> None:
-        self.session.set_provider(GraphAuthProvider())
-        self._set_busy(True, "Starting Microsoft 365 sign-in…")
-        threading.Thread(target=self._do_sign_in, daemon=True).start()
 
     def _sign_in_local(self) -> None:
         email = self.email_entry.get().strip()

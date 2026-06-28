@@ -107,6 +107,12 @@ class AuditFormView(ctk.CTkFrame):
         self._date_entry.grid(row=r, column=3, sticky="ew", padx=10, pady=8)
         r += 1
 
+        # Auditor Name (editable; defaults to the signed-in user).
+        self._field_label(card, "Auditor Name *", r, 0)
+        self._auditor_entry = ctk.CTkEntry(card, placeholder_text="Auditor name")
+        self._auditor_entry.grid(row=r, column=1, sticky="ew", padx=10, pady=8)
+        r += 1
+
         # Case number + Genesys id.
         self._field_label(card, "Case Number *", r, 0)
         self._case_entry = ctk.CTkEntry(card, placeholder_text="Case number")
@@ -222,6 +228,8 @@ class AuditFormView(ctk.CTkFrame):
         self._agent_entry.set(a.agent)
         for key, entry in self._readonly_fields.items():
             self._set_ro(entry, getattr(a, key, ""))
+        self._auditor_entry.delete(0, "end")
+        self._auditor_entry.insert(0, a.auditor_name or a.qa_name)
         self._date_entry.delete(0, "end"); self._date_entry.insert(0, a.date)
         self._case_entry.delete(0, "end"); self._case_entry.insert(0, a.case_number)
         self._genesys_entry.delete(0, "end"); self._genesys_entry.insert(0, a.genesys_id)
@@ -239,6 +247,7 @@ class AuditFormView(ctk.CTkFrame):
         return replace(
             self._audit,
             agent=self._agent_entry.get().strip(),
+            auditor_name=self._auditor_entry.get().strip(),
             date=self._date_entry.get().strip(),
             case_number=self._case_entry.get().strip(),
             genesys_id=self._genesys_entry.get().strip(),
