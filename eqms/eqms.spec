@@ -16,10 +16,15 @@ Notes
 * ``console=False`` produces a windowed app (no terminal window).
 """
 
+import os
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
+
+# Use a branded icon only if one is present (and only on Windows).
+_icon_path = os.path.join("src", "eqms", "resources", "app.ico")
+_icon = _icon_path if (sys.platform.startswith("win") and os.path.exists(_icon_path)) else None
 
 datas = []
 datas += collect_data_files("customtkinter")
@@ -73,5 +78,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="src/eqms/resources/app.ico" if sys.platform.startswith("win") else None,
+    icon=_icon,
 )
