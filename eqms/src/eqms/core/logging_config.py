@@ -59,14 +59,18 @@ def configure_logging(level: int = logging.INFO) -> logging.Logger:
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
 
-    # Console handler (visible when launched from a terminal / dev mode).
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-
     app_logger.setLevel(logging.DEBUG)
     app_logger.addHandler(file_handler)
-    app_logger.addHandler(console_handler)
+
+    # Console handler — only when a real stdout exists. A windowed PyInstaller
+    # build (console=False) sets sys.stdout/sys.stderr to None; attaching a
+    # StreamHandler to None makes every log emit raise internally, so we skip it.
+    if sys.stdout is not None:
+        console_handler = logging.StreamHandler(stream=sys.stdout)
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(level)
+        app_logger.addHandler(console_handler)
+
     app_logger.propagate = False
 
     # Quieten chatty third-party libraries.
