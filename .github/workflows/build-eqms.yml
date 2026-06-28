@@ -46,9 +46,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest
 
       - name: Run tests
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Build single-file executable
         run: python scripts/build.py --clean
