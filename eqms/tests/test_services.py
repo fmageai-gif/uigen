@@ -29,8 +29,9 @@ def audit_service(store, qa_session, seeded_masterlist):
 def _valid_audit(svc):
     a = svc.new_blank_audit()
     a = svc.apply_agent(a, "John Smith")
-    return replace(a, case_number="C1", genesys_id="G1", validation="Valid",
-                   reason="RESOLVED", remarks="looks good")
+    return replace(a, auditor_name="QA Auditor", case_number="C1",
+                   genesys_id="G1", validation="Valid", reason="RESOLVED",
+                   remarks="looks good")
 
 
 def test_create_valid_audit(audit_service):

@@ -90,6 +90,7 @@ class EmailService:
             ("Audit ID", audit.audit_id),
             ("Date", audit.date),
             ("QA", audit.qa_name),
+            ("Auditor", audit.auditor_name),
             ("Agent", audit.agent),
             ("Agent EID", audit.agent_eid),
             ("Team Leader", audit.team_leader),

@@ -39,12 +39,17 @@ def configure_sharepoint(
 
 
 def get_store() -> ExcelStore:
-    """Return the active store, creating a local fallback if none is set."""
+    """Return the active store, creating the local database store if none is set.
+
+    The database folder is resolved from :func:`config.get_storage_path` so the
+    administrator can host the Excel database on a shared network folder.
+    """
     global _store
     if _store is None:
         config.ensure_directories()
-        _store = LocalExcelStore(config.LOCAL_STORE_DIR)
-        _log.info("Storage backend: Local fallback (%s)", config.LOCAL_STORE_DIR)
+        root = config.get_storage_path()
+        _store = LocalExcelStore(root)
+        _log.info("Storage backend: Excel database at %s", root)
     return _store
 
 

@@ -52,14 +52,19 @@ Enable/disable each **dashboard KPI card**. Reopen the dashboard to apply.
 - **QA distribution list** — extra recipients (comma/newline separated) added to
   every notification, alongside the agent's TL and OM.
 
-### SharePoint
-- **Use SharePoint storage** — when off, the app uses the local Excel store.
-- **Site URL** — e.g. `https://org.sharepoint.com/sites/QA`.
-- **Folder path** — e.g. `Shared Documents/EQMS`.
+### Database
+All audits are saved to Excel workbooks in the **database folder**:
 
-Changes take effect after sign-out/restart. The five workbooks
-(`Settings.xlsx`, `Masterlist.xlsx`, `AuditDatabase.xlsx`, `Archive.xlsx`,
-`SystemLogs.xlsx`) are created automatically in that folder on first use.
+- **Database folder** — where the five workbooks live (`Settings.xlsx`,
+  `Masterlist.xlsx`, `AuditDatabase.xlsx`, `Archive.xlsx`, `SystemLogs.xlsx`).
+- Leave it **local to this PC**, or point it at a **shared network folder**
+  (e.g. `\\fileserver\QA\EQMS`) so the whole QA team uses **one** database.
+- Use **Browse…** to pick a folder, then **Save & switch** — the app reopens
+  the database in the new location immediately (and seeds it if empty).
+
+Microsoft 365 / SharePoint sign-in is not used; the Excel database is the
+single system of record, and audits are always saved there — including when the
+machine is offline (the folder just needs to be reachable when shared).
 
 ### Backups & Updates
 - **Automatic backups**, interval (hours) and **retention** (how many to keep).

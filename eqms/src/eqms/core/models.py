@@ -104,6 +104,7 @@ class Audit:
     date: str = ""           # ISO date the audit covers / was created
     qa_name: str = ""        # auto-filled from the signed-in user
     qa_email: str = ""       # owner; used to enforce "edit only your own"
+    auditor_name: str = ""   # name of the auditor performing the audit
     agent: str = ""
     agent_eid: str = ""
     team_leader: str = ""
@@ -126,6 +127,7 @@ class Audit:
         "Date",
         "QA Name",
         "QA Email",
+        "Auditor Name",
         "Agent",
         "Agent EID",
         "TL",
@@ -150,6 +152,7 @@ class Audit:
             self.date,
             self.qa_name,
             self.qa_email,
+            self.auditor_name,
             self.agent,
             self.agent_eid,
             self.team_leader,
@@ -176,6 +179,7 @@ class Audit:
             date=get("Date"),
             qa_name=get("QA Name"),
             qa_email=get("QA Email"),
+            auditor_name=get("Auditor Name"),
             agent=get("Agent"),
             agent_eid=get("Agent EID"),
             team_leader=get("TL"),

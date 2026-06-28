@@ -89,24 +89,34 @@ class MasterlistRepository:
 
     # -- admin upload -------------------------------------------------------
 
-    def replace_from_file(self, local_xlsx) -> int:
+    def replace_from_file(self, local_xlsx, *, overrides: dict | None = None):
         """Replace the masterlist with an admin-uploaded ``.xlsx`` file.
 
-        Reads the uploaded workbook, normalises it onto the canonical
-        :class:`Agent` columns, and writes it back to the store. Returns the
-        number of agent rows imported.
+        Auto-detects the correct sheet/header row and maps the source columns
+        onto the canonical :class:`Agent` layout (see
+        :mod:`eqms.data.masterlist_import`), so real-world masterlists with many
+        sheets and organisation-specific headers import correctly. ``overrides``
+        optionally forces specific field→source-column mappings.
+
+        Returns the :class:`~eqms.data.masterlist_import.ImportResult`, which is
+        truthy as a count via ``len(result.agents)`` and carries a mapping
+        report for display to the administrator.
         """
-        from ..sharepoint import excel_io
         from pathlib import Path
 
+        from . import masterlist_import
+
         path = Path(local_xlsx)
-        raw_rows = excel_io.read_rows(path)
-        agents = [Agent.from_row(r) for r in raw_rows]
-        agents = [a for a in agents if a.agent_name or a.agent_eid]
+        result = masterlist_import.import_agents(path, overrides=overrides)
+        if not result.agents:
+            raise ValueError(
+                "No agent rows were found. Detected sheet "
+                f"'{result.sheet}' but every row was empty."
+            )
         self._store.write_rows(
             config.WORKBOOK_MASTERLIST, SHEET_MASTERLIST, Agent.HEADERS,
-            [a.to_row() for a in agents],
+            [a.to_row() for a in result.agents],
         )
         self.refresh()
-        _log.info("Replaced masterlist with %d agents from %s", len(agents), path.name)
-        return len(agents)
+        _log.info("Replaced masterlist: %s", result.summary())
+        return result
