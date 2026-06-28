@@ -149,6 +149,9 @@ class BackgroundWorker(threading.Thread):
 
     def run(self) -> None:  # pragma: no cover - timing/loop behaviour
         _log.info("Background worker started")
+        # Wait one interval before the first tick so start-up and a user's first
+        # save are never contended by background I/O.
+        self._stop.wait(max(15, self.ctx.settings.get_int("sync.interval_seconds", 60)))
         while not self._stop.is_set():
             try:
                 self._tick()

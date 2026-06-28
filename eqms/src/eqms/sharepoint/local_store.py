@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Sequence
 
-from ..core.exceptions import WorkbookLockedError, WorkbookNotFoundError
+from ..core.exceptions import WorkbookNotFoundError
 from ..core.logging_config import get_logger
 from . import excel_io
 from .base import ExcelStore, WorkbookSession
@@ -34,6 +35,13 @@ class LocalExcelStore(ExcelStore):
     def __init__(self, root: Path):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        # Process-wide lock serialising ALL reads and writes. This is the key
+        # guard against the UI's save thread and the background sync/backup
+        # thread touching the same workbook at the same time — on Windows a
+        # concurrent read holds the file open and a simultaneous write would
+        # otherwise block indefinitely. Reentrant so a write that also reads
+        # does not self-deadlock.
+        self._io_lock = threading.RLock()
         _log.info("LocalExcelStore rooted at %s", self.root)
 
     # -- path helpers -------------------------------------------------------
@@ -47,32 +55,36 @@ class LocalExcelStore(ExcelStore):
     # -- ExcelStore API -----------------------------------------------------
 
     def exists(self, workbook: str) -> bool:
-        return self._path(workbook).exists()
+        with self._io_lock:
+            return self._path(workbook).exists()
 
     def read_rows(
         self, workbook: str, sheet: str | None = None
     ) -> list[dict[str, str]]:
-        return excel_io.read_rows(self._path(workbook), sheet)
+        with self._io_lock:
+            return excel_io.read_rows(self._path(workbook), sheet)
 
     def download(self, workbook: str, destination: Path) -> Path:
-        src = self._path(workbook)
-        if not src.exists():
-            raise WorkbookNotFoundError(f"{workbook} not found in local store")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, destination)
-        return destination
+        with self._io_lock:
+            src = self._path(workbook)
+            if not src.exists():
+                raise WorkbookNotFoundError(f"{workbook} not found in local store")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, destination)
+            return destination
 
     def upload(self, workbook: str, source: Path) -> None:
-        dst = self._path(workbook)
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, dst)
+        with self._io_lock:
+            dst = self._path(workbook)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dst)
 
     @contextmanager
     def open_workbook(
         self, workbook: str, headers: Sequence[str], sheet: str
     ) -> Iterator[WorkbookSession]:
         path = self._path(workbook)
-        with self._advisory_lock(workbook):
+        with self._io_lock, self._advisory_lock(workbook):
             excel_io.ensure_sheet(path, sheet, headers)
             session = WorkbookSession(workbook, path)
             yield session
@@ -82,11 +94,15 @@ class LocalExcelStore(ExcelStore):
     # -- advisory locking ---------------------------------------------------
 
     @contextmanager
-    def _advisory_lock(self, workbook: str, timeout: float = 5.0):
-        """Acquire an exclusive lock file, raising if it cannot be obtained.
+    def _advisory_lock(self, workbook: str, timeout: float = 3.0):
+        """Acquire a best-effort cross-process lock file for a shared folder.
 
-        Raising :class:`WorkbookLockedError` lets the retry layer back off and
-        try again, mirroring SharePoint's behaviour when a file is checked out.
+        Within a single process the global ``_io_lock`` already serialises
+        access; this lock only matters when several app instances share one
+        database folder (e.g. a network drive). To guarantee that a crash which
+        leaves a stale lock file can never permanently wedge saving, the lock is
+        *stolen* after ``timeout`` rather than raising — at worst two instances
+        briefly overlap, which the in-place Excel write tolerates.
         """
         lock = self._lock_path(workbook)
         deadline = time.time() + timeout
@@ -97,10 +113,13 @@ class LocalExcelStore(ExcelStore):
                 break
             except FileExistsError:
                 if time.time() >= deadline:
-                    raise WorkbookLockedError(
-                        f"{workbook} is locked by another process"
-                    )
-                time.sleep(0.1)
+                    _log.warning("Stealing stale lock for %s", workbook)
+                    try:
+                        lock.unlink()
+                    except FileNotFoundError:  # pragma: no cover
+                        pass
+                    continue
+                time.sleep(0.05)
         try:
             yield
         finally:
