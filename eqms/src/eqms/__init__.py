@@ -12,7 +12,7 @@ __all__ = ["__version__", "APP_NAME", "APP_SHORT_NAME"]
 
 #: Semantic version of the application. Surfaced in the UI, logs and the update
 #: checker. Bump this on every release.
-__version__ = "1.1.1"
+__version__ = "1.1.3"
 
 #: Human-readable application name used in window titles, emails and reports.
 APP_NAME = "HP Mainstream Enterprise Quality Management System"

@@ -64,6 +64,10 @@ class SettingsStore:
                 config.WORKBOOK_SETTINGS, D.SHEET_WIDGETS, D.WIDGET_HEADERS,
                 [list(w) for w in D.DEFAULT_DASHBOARD_WIDGETS],
             )
+            self._store.write_rows(
+                config.WORKBOOK_SETTINGS, D.SHEET_AUTH_USERS, D.AUTH_USER_HEADERS,
+                [[e] for e in D.DEFAULT_AUTHORIZED_USERS],
+            )
             self._seeded = True
             self.refresh()
 
@@ -175,6 +179,77 @@ class SettingsStore:
             config.WORKBOOK_SETTINGS, D.SHEET_EMAIL_RECIPIENTS,
             D.RECIPIENT_HEADERS, rows,
         )
+
+    # -- authorised users (login allow-list) --------------------------------
+
+    def get_authorized_users(self) -> list[str]:
+        """Return the lower-cased allow-list of QA emails permitted to sign in.
+
+        Falls back to the seed defaults when the sheet is absent/empty so an
+        upgrade never locks existing users out before the admin saves a list.
+        """
+        rows = self._store.read_rows(config.WORKBOOK_SETTINGS, D.SHEET_AUTH_USERS)
+        emails = [
+            r.get("Email", "").strip().lower()
+            for r in rows if r.get("Email", "").strip()
+        ]
+        if emails:
+            return emails
+        return [e.lower() for e in D.DEFAULT_AUTHORIZED_USERS]
+
+    def set_authorized_users(self, emails) -> None:
+        """Replace the allow-list with ``emails`` (de-duplicated, trimmed)."""
+        seen: set[str] = set()
+        clean: list[str] = []
+        for raw in emails:
+            e = (raw or "").strip()
+            key = e.lower()
+            if e and key not in seen:
+                seen.add(key)
+                clean.append(e)
+        self._store.write_rows(
+            config.WORKBOOK_SETTINGS, D.SHEET_AUTH_USERS, D.AUTH_USER_HEADERS,
+            [[e] for e in clean],
+        )
+        _log.info("Updated authorized users (%d entries)", len(clean))
+
+    def add_authorized_user(self, email: str) -> bool:
+        """Add ``email`` to the allow-list. Returns ``True`` if newly added."""
+        email = (email or "").strip()
+        if not email:
+            return False
+        current = self.get_authorized_users()
+        if email.lower() in current:
+            return False
+        self.set_authorized_users(current + [email])
+        return True
+
+    def remove_authorized_user(self, email: str) -> bool:
+        """Remove ``email`` from the allow-list. Returns ``True`` if removed."""
+        target = (email or "").strip().lower()
+        current = self.get_authorized_users()
+        kept = [e for e in current if e.lower() != target]
+        if len(kept) == len(current):
+            return False
+        self.set_authorized_users(kept)
+        return True
+
+    def is_login_allowed(self, email: str) -> bool:
+        """Return ``True`` if ``email`` may sign in.
+
+        The Super Administrator is always allowed. When ``security.restrict_login``
+        is off, anyone may sign in. Otherwise only allow-listed emails pass.
+        """
+        from ..core.utils import normalise_email
+
+        e = normalise_email(email)
+        if not e:
+            return False
+        if e == normalise_email(config.SUPER_ADMIN_EMAIL):
+            return True
+        if not self.get_bool("security.restrict_login", True):
+            return True
+        return e in set(self.get_authorized_users())
 
     # -- dashboard widgets --------------------------------------------------
 

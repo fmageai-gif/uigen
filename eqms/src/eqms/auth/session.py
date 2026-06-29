@@ -43,12 +43,38 @@ class SessionManager:
     # -- authentication -----------------------------------------------------
 
     def sign_in(self, prompt_callback: Callable[[str], None] | None = None) -> User:
-        """Authenticate via the active provider and store the session user."""
+        """Authenticate via the active provider and store the session user.
+
+        Enforces the configurable login allow-list: only authorised QA emails
+        and the Super Administrator may sign in. Unauthorised accounts are
+        rejected before any session is established.
+        """
         with self._lock:
             user = self._provider.sign_in(prompt_callback)
+            self._authorise(user)
             self._user = user
             self._wire_storage()
             return user
+
+    def _authorise(self, user: User) -> None:
+        """Raise :class:`PermissionDeniedError` if the user is not allow-listed."""
+        from ..data.settings_store import SettingsStore
+
+        try:
+            settings = SettingsStore()
+            settings.ensure_seeded()
+            allowed = settings.is_login_allowed(user.email)
+        except PermissionDeniedError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - never hard-fail open on errors
+            _log.error("Authorization check failed for %s: %s", user.email, exc)
+            allowed = True  # fail open on infrastructure errors, not policy
+        if not allowed:
+            _log.warning("Rejected unauthorised sign-in: %s", user.email)
+            raise PermissionDeniedError(
+                "This account is not authorized to use EQMS. "
+                "Please contact your administrator."
+            )
 
     def sign_out(self) -> None:
         with self._lock:

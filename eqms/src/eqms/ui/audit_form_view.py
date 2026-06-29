@@ -91,26 +91,26 @@ class AuditFormView(ctk.CTkFrame):
 
         # Auto-filled read-only fields.
         self._readonly_fields["agent_eid"] = self._ro_field(card, "Agent EID", r, 0)
-        self._readonly_fields["queue"] = self._ro_field(card, "Queue", r, 2)
+        self._readonly_fields["region"] = self._ro_field(card, "Region", r, 2)
         r += 1
-        self._readonly_fields["team_leader"] = self._ro_field(card, "Team Leader", r, 0)
-        self._readonly_fields["lob"] = self._ro_field(card, "LOB", r, 2)
+        self._readonly_fields["agent_email"] = self._ro_field(card, "Agent Email", r, 0)
+        self._readonly_fields["team_leader"] = self._ro_field(card, "Team Leader", r, 2)
         r += 1
         self._readonly_fields["operations_manager"] = self._ro_field(
             card, "Operations Manager", r, 0)
-        self._readonly_fields["tl_email"] = self._ro_field(card, "TL Email", r, 2)
+        self._readonly_fields["lob"] = self._ro_field(card, "LOB", r, 2)
         r += 1
-        self._readonly_fields["om_email"] = self._ro_field(card, "OM Email", r, 0)
-        # Date (editable).
-        self._field_label(card, "Date", r, 2)
-        self._date_entry = ctk.CTkEntry(card)
-        self._date_entry.grid(row=r, column=3, sticky="ew", padx=10, pady=8)
+        self._readonly_fields["tl_email"] = self._ro_field(card, "TL Email", r, 0)
+        self._readonly_fields["om_email"] = self._ro_field(card, "OM Email", r, 2)
         r += 1
 
-        # Auditor Name (editable; defaults to the signed-in user).
+        # Auditor Name (editable; defaults to the signed-in user) + Date.
         self._field_label(card, "Auditor Name *", r, 0)
         self._auditor_entry = ctk.CTkEntry(card, placeholder_text="Auditor name")
         self._auditor_entry.grid(row=r, column=1, sticky="ew", padx=10, pady=8)
+        self._field_label(card, "Date", r, 2)
+        self._date_entry = ctk.CTkEntry(card)
+        self._date_entry.grid(row=r, column=3, sticky="ew", padx=10, pady=8)
         r += 1
 
         # Case number + Genesys id.
@@ -191,14 +191,9 @@ class AuditFormView(ctk.CTkFrame):
     def _on_agent_selected(self, label: str, agent) -> None:
         self._audit = self.ctx.audit_service.apply_agent(self._audit, agent.agent_name)
         self._agent_entry.set(agent.agent_name)
-        self._set_ro(self._readonly_fields["agent_eid"], agent.agent_eid)
-        self._set_ro(self._readonly_fields["team_leader"], agent.team_leader)
-        self._set_ro(self._readonly_fields["operations_manager"],
-                     agent.operations_manager)
-        self._set_ro(self._readonly_fields["queue"], agent.queue)
-        self._set_ro(self._readonly_fields["lob"], agent.lob)
-        self._set_ro(self._readonly_fields["tl_email"], agent.tl_email)
-        self._set_ro(self._readonly_fields["om_email"], agent.om_email)
+        # Read-only field keys match Agent attribute names, so populate generically.
+        for key, entry in self._readonly_fields.items():
+            self._set_ro(entry, getattr(agent, key, ""))
 
     # -- validation/reason cascade -----------------------------------------
 

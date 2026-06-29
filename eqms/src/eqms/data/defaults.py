@@ -84,12 +84,38 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "email.subject_template": "[EQMS] Invalid Audit {audit_id} - {agent}",
     # --- Security ---
     "security.archive_password": "",     # set by admin; gates archive/delete
+    "security.restrict_login": "true",   # only allow-listed users (+ admin) sign in
     # --- Validation rules (editable toggles) ---
     "validation.remarks_required": "true",
     "validation.unique_case_genesys": "true",
     "validation.block_duplicate_submissions": "true",
     "validation.require_agent_from_masterlist": "false",
 }
+
+# ---------------------------------------------------------------------------
+# Authorised QA users (login allow-list). Seeded here, then fully managed by the
+# Super Administrator in the Admin Center. The Super Administrator
+# (config.SUPER_ADMIN_EMAIL) is ALWAYS allowed and is not part of this list.
+# When security.restrict_login is true, only these emails (plus the admin) may
+# sign in; everyone else is rejected.
+# ---------------------------------------------------------------------------
+
+DEFAULT_AUTHORIZED_USERS = [
+    "ivy.serata@concentrix.com",
+    "jonel.meniano1@concentrix.com",
+    "archieval.decena@concentrix.com",
+    "donnah.brual@concentrix.com",
+    "emil.eduardo@concentrix.com",
+    "maevenus.setias@concentrix.com",
+    "kurtjohn.gatmaitan@concentrix.com",
+    "attinareccie.padaya@concentrix.com",
+    "christian.pila@concentrix.com",
+    "shaileen.almodiel@concentrix.com",
+    "darlene.presado@concentrix.com",
+    "anita.fabales@concentrix.com",
+    "jessalyn.sastrillo@concentrix.com",
+    "caroline.chan@concentrix.com",
+]
 
 # ---------------------------------------------------------------------------
 # Default dashboard widgets (KPI cards) — order and visibility are editable.
@@ -121,8 +147,10 @@ SHEET_VALID_REASONS = "ValidReasons"
 SHEET_INVALID_REASONS = "InvalidReasons"
 SHEET_EMAIL_RECIPIENTS = "EmailRecipients"
 SHEET_WIDGETS = "DashboardWidgets"
+SHEET_AUTH_USERS = "AuthorizedUsers"
 
 SETTINGS_HEADERS = ("Key", "Value")
 REASON_HEADERS = ("Reason",)
 RECIPIENT_HEADERS = ("Name", "Email", "Role")
 WIDGET_HEADERS = ("Key", "Label", "Enabled")
+AUTH_USER_HEADERS = ("Email",)

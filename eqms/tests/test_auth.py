@@ -15,7 +15,10 @@ def test_admin_email_match_is_case_insensitive():
     assert not is_admin_email("someone.else@concentrix.com")
 
 
-def test_qa_session_is_not_admin():
+def test_qa_session_is_not_admin(store):
+    from eqms.data.settings_store import SettingsStore
+
+    SettingsStore(store).set("security.restrict_login", "false")  # not testing the allow-list here
     sm = SessionManager(LocalAuthProvider("qa@concentrix.com"))
     sm.sign_in()
     assert not sm.is_admin
@@ -31,7 +34,10 @@ def test_admin_session_passes_gate():
     assert sm.can_edit_audit("anyone@x.com")  # admin can edit any
 
 
-def test_qa_can_edit_only_own():
+def test_qa_can_edit_only_own(store):
+    from eqms.data.settings_store import SettingsStore
+
+    SettingsStore(store).set("security.restrict_login", "false")
     sm = SessionManager(LocalAuthProvider("qa@concentrix.com"))
     sm.sign_in()
     assert sm.can_edit_audit("qa@concentrix.com")

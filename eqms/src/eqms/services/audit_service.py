@@ -73,11 +73,12 @@ class AuditService:
             audit,
             agent=agent.agent_name,
             agent_eid=agent.agent_eid,
+            agent_email=agent.agent_email,
             team_leader=agent.team_leader,
             operations_manager=agent.operations_manager,
             tl_email=agent.tl_email,
             om_email=agent.om_email,
-            queue=agent.queue,
+            region=agent.region,
             lob=agent.lob,
         )
 
@@ -197,7 +198,7 @@ class AuditService:
                 haystack = " ".join([
                     a.audit_id, a.agent, a.agent_eid, a.case_number,
                     a.genesys_id, a.team_leader, a.operations_manager,
-                    a.qa_name, a.reason, a.remarks, a.queue, a.lob,
+                    a.qa_name, a.reason, a.remarks, a.region, a.lob,
                 ]).lower()
                 return query in haystack
             audits = [a for a in audits if matches(a)]

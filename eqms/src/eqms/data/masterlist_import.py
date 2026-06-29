@@ -35,6 +35,10 @@ COLUMN_ALIASES: dict[str, list[str]] = {
         "agent eid", "eid", "hpi", "employee id", "emp id", "worker id",
         "oracle", "new iex", "iex", "msp bpids", "msp bpid",
     ],
+    "agent_email": [
+        "agent email", "email address", "email", "e-mail", "work email",
+        "email id",
+    ],
     "team_leader": [
         "team leader", "tl full name", "tl name", "tl", "team lead",
         "supervisor", "immediate superior full name",
@@ -43,9 +47,9 @@ COLUMN_ALIASES: dict[str, list[str]] = {
         "operations manager", "mngr full name", "manager", "mngr name",
         "ops manager", "operation manager", "om",
     ],
-    "queue": ["queue", "internal lob", "wd position", "skill", "lob (msa)"],
+    "region": ["region", "queue", "wd position", "skill", "site location"],
     "lob": [
-        "lob", "internal lob", "wd lob", "lob (msa)", "line of business",
+        "wd lob", "lob", "internal lob", "lob (msa)", "line of business",
         "lob code",
     ],
     "tl_email": [
@@ -63,6 +67,7 @@ COLUMN_ALIASES: dict[str, list[str]] = {
 #: even when the masterlist has no dedicated "TL Email"/"OM Email" columns.
 LOOKUP_ALIASES: dict[str, list[str]] = {
     "email": ["email address", "email", "e-mail", "email id", "work email"],
+    "full_name": ["full name", "fullname"],
     "tl_eid": ["tl eid", "team leader eid", "supervisor eid",
                "immediate superior eid"],
     "om_eid": ["mngr eid", "manager eid", "om eid", "operations manager eid"],
@@ -183,8 +188,9 @@ def import_agents(path: str | Path, overrides: dict[str, str] | None = None
 
     wb = load_workbook(path, read_only=True, data_only=True)
     agents: list[Agent] = []
-    leader_eids: list[tuple[Agent, str, str]] = []  # (agent, tl_eid, om_eid)
+    leaders: list[tuple[Agent, str, str]] = []  # (agent, tl_eid, om_eid)
     email_by_eid: dict[str, str] = {}
+    email_by_name: dict[str, str] = {}
     try:
         ws = wb[sheet]
         for idx, row in enumerate(ws.iter_rows(values_only=True)):
@@ -196,12 +202,19 @@ def import_agents(path: str | Path, overrides: dict[str, str] | None = None
             if not (agent.agent_name or agent.agent_eid):
                 continue
             agents.append(agent)
-            # Build EID -> email map and remember each agent's TL/OM EIDs so we
-            # can resolve leader emails in a second pass.
-            own_email = _cell(row, lookups.get("email"))
-            if agent.agent_eid and own_email:
-                email_by_eid[_norm(agent.agent_eid)] = own_email
-            leader_eids.append((
+            # The email used to resolve THIS person when they are someone's TL/OM
+            # comes from the EMAIL ADDRESS column (== the agent's own email).
+            own_email = agent.agent_email or _cell(row, lookups.get("email"))
+            full_name = _cell(row, lookups.get("full_name"))
+            if own_email:
+                if agent.agent_eid:
+                    email_by_eid[_norm(agent.agent_eid)] = own_email
+                # Index by every name form so a TL/OM referenced by full name or
+                # genesys name resolves regardless of which the masterlist uses.
+                for name in (full_name, agent.agent_name):
+                    if name:
+                        email_by_name[_norm(name)] = own_email
+            leaders.append((
                 agent,
                 _cell(row, lookups.get("tl_eid")),
                 _cell(row, lookups.get("om_eid")),
@@ -209,15 +222,22 @@ def import_agents(path: str | Path, overrides: dict[str, str] | None = None
     finally:
         wb.close()
 
-    # Second pass: fill TL/OM emails from the EID->email map where the masterlist
-    # did not provide explicit email columns.
+    # Second pass: resolve each agent's TL/OM email from the EMAIL ADDRESS
+    # column of their leader's row — matched first by EID, then by name, so it
+    # works whichever identifier the masterlist links leaders by.
     derived = 0
-    for agent, tl_eid, om_eid in leader_eids:
-        if not agent.tl_email and tl_eid:
-            agent.tl_email = email_by_eid.get(_norm(tl_eid), "")
+    for agent, tl_eid, om_eid in leaders:
+        if not agent.tl_email:
+            agent.tl_email = (
+                email_by_eid.get(_norm(tl_eid), "")
+                or email_by_name.get(_norm(agent.team_leader), "")
+            )
             derived += 1 if agent.tl_email else 0
-        if not agent.om_email and om_eid:
-            agent.om_email = email_by_eid.get(_norm(om_eid), "")
+        if not agent.om_email:
+            agent.om_email = (
+                email_by_eid.get(_norm(om_eid), "")
+                or email_by_name.get(_norm(agent.operations_manager), "")
+            )
 
     missing = [f for f in COLUMN_ALIASES
                if f not in mapping and f not in ("tl_email", "om_email")]
@@ -243,9 +263,10 @@ def _row_to_agent(row, mapping: dict[str, int]) -> Agent:
     return Agent(
         agent_name=_cell(row, mapping.get("agent_name")),
         agent_eid=_cell(row, mapping.get("agent_eid")),
+        agent_email=_cell(row, mapping.get("agent_email")),
         team_leader=_cell(row, mapping.get("team_leader")),
         operations_manager=_cell(row, mapping.get("operations_manager")),
-        queue=_cell(row, mapping.get("queue")),
+        region=_cell(row, mapping.get("region")),
         lob=_cell(row, mapping.get("lob")),
         tl_email=_cell(row, mapping.get("tl_email")),
         om_email=_cell(row, mapping.get("om_email")),
