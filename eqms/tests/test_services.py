@@ -125,10 +125,12 @@ def test_email_recipients_and_invalid_only(store, qa_session):
 
     valid = Audit(validation="Valid")
     assert not svc.should_send(valid)
-    invalid = Audit(validation="Invalid", tl_email="tl@x.com", om_email="om@x.com")
+    invalid = Audit(validation="Invalid", agent_email="agent@x.com",
+                    tl_email="tl@x.com", om_email="om@x.com")
     assert svc.should_send(invalid)
     recipients = svc.resolve_recipients(invalid)
-    assert set(recipients) == {"tl@x.com", "om@x.com", "dist@x.com"}
+    # Agent, TL and OM all receive the notification, plus the distribution list.
+    assert set(recipients) == {"agent@x.com", "tl@x.com", "om@x.com", "dist@x.com"}
 
 
 def test_report_generation(store, qa_session, seeded_masterlist, tmp_path):

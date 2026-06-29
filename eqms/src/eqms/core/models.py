@@ -37,9 +37,10 @@ class Agent:
 
     agent_name: str = ""
     agent_eid: str = ""
+    agent_email: str = ""
     team_leader: str = ""
     operations_manager: str = ""
-    queue: str = ""
+    region: str = ""
     lob: str = ""
     tl_email: str = ""
     om_email: str = ""
@@ -47,9 +48,10 @@ class Agent:
     HEADERS = (
         "Agent Name",
         "Agent EID",
+        "Agent Email",
         "Team Leader",
         "Operations Manager",
-        "Queue",
+        "Region",
         "LOB",
         "TL Email",
         "OM Email",
@@ -59,9 +61,10 @@ class Agent:
         return [
             self.agent_name,
             self.agent_eid,
+            self.agent_email,
             self.team_leader,
             self.operations_manager,
-            self.queue,
+            self.region,
             self.lob,
             self.tl_email,
             self.om_email,
@@ -74,9 +77,10 @@ class Agent:
         return cls(
             agent_name=get("Agent Name"),
             agent_eid=get("Agent EID"),
+            agent_email=get("Agent Email"),
             team_leader=get("Team Leader"),
             operations_manager=get("Operations Manager"),
-            queue=get("Queue"),
+            region=get("Region"),
             lob=get("LOB"),
             tl_email=get("TL Email"),
             om_email=get("OM Email"),
@@ -107,11 +111,12 @@ class Audit:
     auditor_name: str = ""   # name of the auditor performing the audit
     agent: str = ""
     agent_eid: str = ""
+    agent_email: str = ""
     team_leader: str = ""
     operations_manager: str = ""
     tl_email: str = ""
     om_email: str = ""
-    queue: str = ""
+    region: str = ""
     lob: str = ""
     case_number: str = ""
     genesys_id: str = ""
@@ -130,11 +135,12 @@ class Audit:
         "Auditor Name",
         "Agent",
         "Agent EID",
+        "Agent Email",
         "TL",
         "OM",
         "TL Email",
         "OM Email",
-        "Queue",
+        "Region",
         "LOB",
         "Case Number",
         "Genesys Transaction ID",
@@ -155,11 +161,12 @@ class Audit:
             self.auditor_name,
             self.agent,
             self.agent_eid,
+            self.agent_email,
             self.team_leader,
             self.operations_manager,
             self.tl_email,
             self.om_email,
-            self.queue,
+            self.region,
             self.lob,
             self.case_number,
             self.genesys_id,
@@ -182,11 +189,12 @@ class Audit:
             auditor_name=get("Auditor Name"),
             agent=get("Agent"),
             agent_eid=get("Agent EID"),
+            agent_email=get("Agent Email"),
             team_leader=get("TL"),
             operations_manager=get("OM"),
             tl_email=get("TL Email"),
             om_email=get("OM Email"),
-            queue=get("Queue"),
+            region=get("Region"),
             lob=get("LOB"),
             case_number=get("Case Number"),
             genesys_id=get("Genesys Transaction ID"),

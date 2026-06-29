@@ -95,9 +95,34 @@ def test_tl_om_emails_derived_by_eid_lookup(tmp_path):
 
     result = masterlist_import.import_agents(path)
     agent = next(a for a in result.agents if a.agent_eid == "101")
+    assert agent.agent_email == "ivy@x.com"   # agent's own email auto-populated
     assert agent.tl_email == "boss@x.com"
     assert agent.om_email == "bigboss@x.com"
     assert "tl_email" not in result.missing  # derived, so not reported missing
+
+
+def test_tl_om_emails_derived_by_name_when_no_eid(tmp_path):
+    """When leaders are referenced only by name (no TL/MNGR EID columns), emails
+    are still resolved by matching the leader's full name to the EMAIL ADDRESS
+    column of their own row."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Masterlist"
+    ws.append(["Genesys Name", "FULL NAME", "HPI", "EMAIL ADDRESS",
+               "TL FULL NAME", "MNGR FULL NAME", "REGION", "WD LOB"])
+    ws.append(["Boss Lady", "Estanislao, Mei", "HPI900", "boss@x.com",
+               "", "", "AMS", "Mgmt"])
+    ws.append(["Ivy", "Serata, Ivy", "HPI052", "ivy@x.com",
+               "Estanislao, Mei", "Estanislao, Mei", "AMS", "II Post Sales"])
+    path = tmp_path / "ml.xlsx"
+    wb.save(path)
+
+    result = masterlist_import.import_agents(path)
+    ivy = next(a for a in result.agents if a.agent_name == "Ivy")
+    assert ivy.region == "AMS"               # Region mapped from REGION
+    assert ivy.lob == "II Post Sales"        # LOB mapped from WD LOB
+    assert ivy.tl_email == "boss@x.com"      # resolved by TL full-name match
+    assert ivy.om_email == "boss@x.com"
 
 
 def test_auditor_name_roundtrips_through_excel_row():

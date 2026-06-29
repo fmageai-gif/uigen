@@ -41,7 +41,14 @@ def admin_session():
 
 
 @pytest.fixture
-def qa_session():
+def qa_session(store):
+    # Authorise the test QA user against the active (temp) store so the login
+    # allow-list does not reject it.
+    from eqms.data.settings_store import SettingsStore
+
+    s = SettingsStore(store)
+    s.ensure_seeded()
+    s.add_authorized_user("qa.user@concentrix.com")
     sm = SessionManager(LocalAuthProvider("qa.user@concentrix.com"))
     sm.sign_in()
     return sm
@@ -50,10 +57,14 @@ def qa_session():
 @pytest.fixture
 def seeded_masterlist(store):
     store.write_rows("Masterlist.xlsx", "Masterlist", Agent.HEADERS, [
-        Agent("John Smith", "E100", "Lead A", "OM A", "Q1", "LOB1",
-              "tl@x.com", "om@x.com").to_row(),
-        Agent("Jane Doe", "E200", "Lead B", "OM B", "Q2", "LOB2",
-              "tl2@x.com", "om2@x.com").to_row(),
+        Agent(agent_name="John Smith", agent_eid="E100",
+              agent_email="john.smith@x.com", team_leader="Lead A",
+              operations_manager="OM A", region="APAC", lob="LOB1",
+              tl_email="tl@x.com", om_email="om@x.com").to_row(),
+        Agent(agent_name="Jane Doe", agent_eid="E200",
+              agent_email="jane.doe@x.com", team_leader="Lead B",
+              operations_manager="OM B", region="EMEA", lob="LOB2",
+              tl_email="tl2@x.com", om_email="om2@x.com").to_row(),
     ])
     return store
 
@@ -78,7 +89,8 @@ def make_audit():
             operations_manager="OM A",
             tl_email="tl@x.com",
             om_email="om@x.com",
-            queue="Q1",
+            agent_email="john.smith@x.com",
+            region="APAC",
             lob="LOB1",
             case_number=f"C{n}",
             genesys_id=f"G{n}",

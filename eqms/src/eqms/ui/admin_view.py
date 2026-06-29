@@ -51,13 +51,14 @@ class AdminView(ctk.CTkFrame):
                                    segmented_button_selected_color=palette.primary)
         self.tabs.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 16))
 
-        for name in ("General", "Branding & Theme", "Audit Reasons",
+        for name in ("General", "Users", "Branding & Theme", "Audit Reasons",
                      "Validation", "Widgets", "Email", "Database",
                      "Backups & Updates", "Masterlist", "Logs",
                      "Archive", "Export"):
             self.tabs.add(name)
 
         self._build_general(self.tabs.tab("General"))
+        self._build_users(self.tabs.tab("Users"))
         self._build_branding(self.tabs.tab("Branding & Theme"))
         self._build_reasons(self.tabs.tab("Audit Reasons"))
         self._build_validation(self.tabs.tab("Validation"))
@@ -127,6 +128,94 @@ class AdminView(ctk.CTkFrame):
         self._bool_row(tab, "Automatic sync", "sync.auto", 4)
         self._save_button(tab, 5, ["app.organisation", "app.title", "app.subtitle",
                                    "sync.interval_seconds", "sync.auto"])
+
+    def _build_users(self, tab) -> None:
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(4, weight=1)
+
+        ctk.CTkLabel(tab, text="Authorized users (login allow-list)",
+                     font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color=self.palette.text).grid(
+            row=0, column=0, sticky="w", padx=10, pady=(10, 2))
+        ctk.CTkLabel(
+            tab, justify="left", text_color=self.palette.text_muted,
+            font=ctk.CTkFont(size=11), wraplength=620,
+            text=("Only the people below may sign in. The Super Administrator "
+                  "(you) is always allowed and is not listed here. Anyone not "
+                  "listed is blocked from the app."),
+        ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 8))
+
+        self._restrict_var = ctk.StringVar(
+            value="true" if self.settings.get_bool("security.restrict_login", True)
+            else "false")
+        ctk.CTkSwitch(
+            tab, text="Restrict login to authorized users",
+            variable=self._restrict_var, onvalue="true", offvalue="false",
+            command=lambda: self.settings.set(
+                "security.restrict_login", self._restrict_var.get()),
+        ).grid(row=2, column=0, sticky="w", padx=10, pady=6)
+
+        add_bar = ctk.CTkFrame(tab, fg_color="transparent")
+        add_bar.grid(row=3, column=0, sticky="ew", padx=8, pady=6)
+        add_bar.grid_columnconfigure(0, weight=1)
+        self._new_user_var = ctk.StringVar()
+        entry = ctk.CTkEntry(add_bar, textvariable=self._new_user_var,
+                             placeholder_text="name@concentrix.com")
+        entry.grid(row=0, column=0, sticky="ew", padx=(2, 6))
+        entry.bind("<Return>", lambda e: self._add_user())
+        ctk.CTkButton(add_bar, text="Add user", width=100,
+                      fg_color=self.palette.primary,
+                      hover_color=self.palette.primary_hover,
+                      command=self._add_user).grid(row=0, column=1)
+
+        self._users_list = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        self._users_list.grid(row=4, column=0, sticky="nsew", padx=8, pady=6)
+        self._users_list.grid_columnconfigure(0, weight=1)
+        self._render_users()
+
+    def _render_users(self) -> None:
+        for child in self._users_list.winfo_children():
+            child.destroy()
+        users = self.settings.get_authorized_users()
+        ctk.CTkLabel(self._users_list,
+                     text=f"{len(users)} authorized user(s)",
+                     text_color=self.palette.text_muted,
+                     font=ctk.CTkFont(size=11)).grid(
+            row=0, column=0, sticky="w", padx=4, pady=(0, 4))
+        for i, email in enumerate(users, start=1):
+            row = ctk.CTkFrame(self._users_list, fg_color=self.palette.surface)
+            row.grid(sticky="ew", pady=2)
+            row.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(row, text=email, anchor="w",
+                         text_color=self.palette.text).grid(
+                row=0, column=0, sticky="w", padx=10, pady=6)
+            ctk.CTkButton(row, text="Remove", width=80,
+                          fg_color=self.palette.danger, hover_color="#B02525",
+                          command=lambda e=email: self._remove_user(e)).grid(
+                row=0, column=1, padx=8)
+
+    def _add_user(self) -> None:
+        from ..core.utils import is_valid_email
+
+        email = self._new_user_var.get().strip()
+        if not is_valid_email(email):
+            self._toast.show("Enter a valid email address", "warning")
+            return
+        if self.settings.add_authorized_user(email):
+            self.ctx.logs.record("USER_AUTHORIZED",
+                                 user=self.ctx.session.user.email, details=email)
+            self._new_user_var.set("")
+            self._render_users()
+            self._toast.show(f"Added {email}", "success")
+        else:
+            self._toast.show("That user is already authorized", "info")
+
+    def _remove_user(self, email: str) -> None:
+        if self.settings.remove_authorized_user(email):
+            self.ctx.logs.record("USER_DEAUTHORIZED",
+                                 user=self.ctx.session.user.email, details=email)
+            self._render_users()
+            self._toast.show(f"Removed {email}", "success")
 
     def _build_branding(self, tab) -> None:
         self._scalar_row(tab, "Primary colour", "app.primary_color", 0,

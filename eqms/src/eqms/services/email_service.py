@@ -45,6 +45,9 @@ class EmailService:
     def resolve_recipients(self, audit: Audit) -> list[str]:
         """Return the de-duplicated recipient list for an audit's email."""
         recipients: list[str] = []
+        # The agent, their TL and their OM all receive the notification.
+        if is_valid_email(audit.agent_email):
+            recipients.append(audit.agent_email.strip())
         if is_valid_email(audit.tl_email):
             recipients.append(audit.tl_email.strip())
         if is_valid_email(audit.om_email):
@@ -93,6 +96,8 @@ class EmailService:
             ("Auditor", audit.auditor_name),
             ("Agent", audit.agent),
             ("Agent EID", audit.agent_eid),
+            ("Agent Email", audit.agent_email),
+            ("Region", audit.region),
             ("Team Leader", audit.team_leader),
             ("Operations Manager", audit.operations_manager),
             ("Case Number", audit.case_number),
