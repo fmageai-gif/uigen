@@ -146,6 +146,11 @@ input.search{min-width:230px}
 .legend div{display:flex; align-items:center; gap:8px; margin:5px 0}
 .legend .sw{width:12px;height:12px;border-radius:3px}
 .empty{color:var(--muted); text-align:center; padding:26px 10px; font-size:13px}
+.defrow{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 4px; border-bottom:1px solid var(--border)}
+.defrow:last-child{border-bottom:0}
+.defrow .deflbl{font-size:13px; color:var(--text)}
+.defpill{color:var(--bad); background:var(--bad-bg); border:1px solid var(--bad); border-radius:99px;
+  padding:3px 13px; font-size:12px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums}
 
 /* ---------- tables ---------- */
 .tablecard{padding:0; overflow:hidden}
@@ -345,8 +350,10 @@ textarea.list{min-height:150px; width:100%; font-size:12.5px}
             <div class="field"><label>Operations Manager</label><input type="text" id="fOM" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>TL Email</label><input type="text" id="fTLEmail" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>OM Email</label><input type="text" id="fOMEmail" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>Queue / Channel</label><input type="text" id="fQueue" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>Audit Date <span class="req">*</span></label><input type="date" id="fDate"></div>
             <div class="field"><label>Auditor Name <span class="req">*</span></label><input type="text" id="fAuditor" readonly></div>
+            <div class="field" style="visibility:hidden"></div>
             <div class="field"><label>Case Number <span class="req">*</span></label><input type="text" id="fCase" placeholder="e.g. 5039981234"></div>
             <div class="field"><label>Genesys Transaction ID / URL <span class="req">*</span></label><input type="text" id="fGenesys" placeholder="e.g. https://apps.mypurecloud.de/… or 00XXXXXX"></div>
             <div class="field"><label>Validation Result / Case Resolution <span class="req">*</span></label><select id="fResolution"></select></div>
@@ -389,7 +396,7 @@ textarea.list{min-height:150px; width:100%; font-size:12.5px}
             <div class="card"><h3>🧑‍💼 Auditor Scorecard</h3><div id="anaAuditors"></div></div>
             <div class="card"><h3>👥 Team Leader Scorecard</h3><div id="anaTLs"></div></div>
           </div>
-          <div class="card"><h3>🏷️ Expected Resolution Code Distribution</h3><div id="anaCodes"></div></div>
+          <div class="card"><h3>📊 Defective Case Resolution Code Distribution</h3><div id="anaCodes"></div></div>
         </div>
       </section>
 
@@ -430,28 +437,39 @@ const VER = '7.0.0';
 const LS = { audits:'eqms7.audits', master:'eqms7.master', settings:'eqms7.settings',
              session:'eqms7.session', tombs:'eqms7.tombs', log:'eqms7.log', theme:'eqms7.theme' };
 
-const DEFAULT_INVALID_RES = [
-  'Remote Solution (Invalid)',
-  'Onsite Solution (Invalid)',
-  'Parts Shipped (Invalid)',
-  'Exchange Solution (Invalid)',
-  'Offsite Solution (Invalid)',
-  'Non-Tech Solution (Invalid)',
+/* The ONLY administrator — hardcoded per spec. Everyone else is an auditor. */
+const ADMIN_EMAIL = 'sundeep.bhardwaj@concentrix.com';
+const ADMIN_NAME  = 'Sundeep Bhardwaj';
+
+const DEFAULT_INVALID_REASONS = [
   'Quick Case (Invalid)',
-  'Referred – for Hardware Service (Invalid)',
-  'Referred – for Software Support (Invalid)',
-  'Unresolved – Not Entitled for Support (Invalid)',
-];
-const DEFAULT_EXPECTED = [
+  'No Support Provided (Security Stop/Hold / Global Trade Fail)',
+  'Cancel Per Customer / No Contact (CPC/NC)',
+  'Case Voided (Test Case / Duplicate / Created by Mistake)',
+  'Non-Tech Solution (General Inquiry / Warranty / How-To)',
   'Remote Solution (HW/SW Resolved Remotely via Troubleshooting)',
-  'Onsite Solution (Break & Fix / Onsite Repair)',
-  'Parts Shipped (CSR Part / RC Whole Unit)',
-  'Exchange Solution (Whole Unit Exchange)',
-  'Offsite Solution (Repair Center / Bench Repair)',
-  'Non-Tech Solution (Non-Technical / Admin Case)',
+  'Offsite Solution (Bench / Depot Repair Service Order)',
+  'Exchange Solution (Whole Unit Exchange Arranged)',
+  'Onsite Solution (Break & Fix / Installation Work Order)',
+  'Parts Shipped (CSR Part / RCD Media / Instant Ink PO)',
+  'Referred – for Hardware Service (ASP / 3rd Party HW / DOA)',
+  'Referred – for Software Support (Out of Scope / 3rd Party SW)',
+  'Unresolved – Not Entitled for Support',
+];
+const DEFAULT_VALID_REASONS = [
+  'Remote Solution (HW/SW Resolved Remotely via Troubleshooting)',
+  'Parts Shipped (CSR Part / RCD Media / Instant Ink PO)',
+  'Onsite Solution (Break & Fix / Installation Work Order)',
+  'Offsite Solution (Bench / Depot Repair Service Order)',
+  'Exchange Solution (Whole Unit Exchange Arranged)',
+  'Non-Tech Solution (General Inquiry / Warranty / How-To)',
+  'Cloud Recovery Download (Recovery Media with No Tech Concern)',
+  'Referred – for Hardware Service (ASP / 3rd Party HW / DOA)',
+  'Referred – for Software Support (Out of Scope / 3rd Party SW)',
   'Quick Case',
-  'Referred – for Hardware Service',
-  'Referred – for Software Support',
+  'No Support Provided (Security Stop/Hold / Global Trade Fail)',
+  'Cancel Per Customer / No Contact (CPC/NC)',
+  'Case Voided (Test Case / Duplicate / Created by Mistake)',
   'Unresolved – Not Entitled for Support',
 ];
 const DEFAULT_USERS = [
@@ -465,11 +483,10 @@ const defaultSettings = () => ({
   updatedAt: '2000-01-01T00:00:00.000Z',
   appTitle: 'HP Mainstream EQMS',
   orgName: 'Concentrix HP Mainstream',
-  adminEmail: 'sundeep.bhardwaj@concentrix.com',
   restrictLogin: false,
   authorizedUsers: DEFAULT_USERS.slice(),
-  invalidResolutions: DEFAULT_INVALID_RES.slice(),
-  expectedCodes: DEFAULT_EXPECTED.slice(),
+  invalidReasons: DEFAULT_INVALID_REASONS.slice(),
+  validReasons: DEFAULT_VALID_REASONS.slice(),
   emailEnabled: true,
   emailCc: '',
   emailSubject: '[EQMS] Invalid Audit {audit_id} - {agent} - Case {case}',
@@ -513,7 +530,11 @@ function csvCell(v){ v = String(v ?? ''); return /[",\r\n]/.test(v) ? '"' + v.re
 function toCsv(rows){ return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n'); }
 
 /* ---------------- state ---------------- */
-let settings = Object.assign(defaultSettings(), load(LS.settings, {}));
+const _rawSettings = load(LS.settings, {});
+// migrate pre-roster field names
+if (_rawSettings.invalidResolutions && !_rawSettings.invalidReasons) _rawSettings.invalidReasons = _rawSettings.invalidResolutions;
+if (_rawSettings.expectedCodes && !_rawSettings.validReasons) _rawSettings.validReasons = _rawSettings.expectedCodes;
+let settings = Object.assign(defaultSettings(), _rawSettings);
 let audits   = load(LS.audits, []);
 let master   = Object.assign({updatedAt:'', agents:[]}, load(LS.master, {}));
 let tombs    = load(LS.tombs, []);
@@ -532,7 +553,7 @@ const filters = {
 };
 
 /* ---------------- auth ---------------- */
-const isAdmin = () => !!session && session.email.toLowerCase() === settings.adminEmail.toLowerCase();
+const isAdmin = () => !!session && session.email.toLowerCase() === ADMIN_EMAIL;
 function logAction(action, details){
   logbook.unshift({ ts: nowIso(), user: session ? session.email : 'system', action, details: details||'' });
   if (logbook.length > 500) logbook.length = 500;
@@ -547,7 +568,7 @@ function signIn(){
     err.textContent = 'Please enter your full name and a valid email address.';
     err.style.display = 'block'; return;
   }
-  if (settings.restrictLogin && email !== settings.adminEmail.toLowerCase()
+  if (settings.restrictLogin && email !== ADMIN_EMAIL
       && !settings.authorizedUsers.some(u => u.toLowerCase() === email)) {
     err.textContent = 'This email is not on the authorized auditor list. Contact the administrator.';
     err.style.display = 'block'; return;
@@ -659,16 +680,21 @@ async function disconnectSync(){
   toast('Team sync disconnected. Data stays on this device.','warn');
 }
 async function restoreSyncHandle(){
-  if (!fsaSupported()) return;
+  if (!fsaSupported()) { renderSyncPill(); return; }
   try {
     const h = await idb.get('handle');
-    if (!h) return;
+    if (!h) { promptConnect(); return; }
     syncHandle = h;
     const perm = await h.queryPermission({mode:'readwrite'});
     if (perm === 'granted') { await syncNow(); startSyncTimer(); }
     else syncError = 'perm';           // needs a user gesture to re-grant
   } catch(e) { syncError = e.message; }
   renderSyncPill();
+}
+/* First sign-in on a PC: immediately walk the auditor through connecting the team DB. */
+function promptConnect(){
+  renderSyncPill();
+  if (!$('#modalOverlay').classList.contains('show')) openSyncHelp();
 }
 async function reauthorizeSync(){
   if (!syncHandle) return;
@@ -678,7 +704,7 @@ async function reauthorizeSync(){
   } catch(e) { toast('Re-authorize failed: '+e.message,'bad'); }
   renderSyncPill();
 }
-function startSyncTimer(){ if (syncTimer) clearInterval(syncTimer); syncTimer = setInterval(()=>syncNow(), 10000); }
+function startSyncTimer(){ if (syncTimer) clearInterval(syncTimer); syncTimer = setInterval(()=>syncNow(), 5000); }
 
 function mergeRemote(remote){
   let changedLocal = false, changedRemote = false;
@@ -774,23 +800,26 @@ function renderSyncPill(){
     el.onclick = () => syncNow(true);
     el.title = syncError;
   } else {
-    el.className = 'pill';
-    el.innerHTML = '<span class="dot"></span> Local Only — connect team DB in Admin';
-    el.onclick = () => isAdmin() ? showView('admin') : toast('Ask the administrator to share the team database file, then connect it from Admin Center. Non-admins: use the ⚙ button here.','warn');
-    if (!isAdmin()) el.onclick = () => openSyncHelp();
+    el.className = 'pill warn';
+    el.innerHTML = '<span class="dot"></span> ⚠ Team Database NOT connected — click to connect';
+    el.onclick = () => openSyncHelp();
   }
 }
 function openSyncHelp(){
-  openModal('🔗 Connect the Team Database', `
-    <p style="font-size:13px;line-height:1.6">To see everyone's audits live, connect this app to the shared
-    <b>EQMS_TeamDB.json</b> file that your administrator placed in the team's SharePoint/OneDrive-synced folder.</p>
+  openModal('☁️ Connect the Team Database (required)', `
+    <p style="font-size:13px;line-height:1.6">All audits live in one shared <b>EQMS_TeamDB.json</b> file in the team's
+    SharePoint/OneDrive folder — that is the team database. Connect it once on this PC and everything you and the
+    other auditors submit merges automatically every 5 seconds.</p>
     <ol style="font-size:13px;line-height:1.8;margin:10px 0 0 18px">
-      <li>In File Explorer, make sure the team folder is synced (OneDrive icon ✔).</li>
+      <li>In File Explorer, make sure the team's SharePoint folder is synced (OneDrive icon ✔).</li>
       <li>Click <b>Connect</b> below and pick <b>EQMS_TeamDB.json</b> from that folder.</li>
-      <li>Done — the app merges your audits with the team's every 10 seconds.</li>
-    </ol>`,
-    `<button class="btn" onclick="App.closeModal()">Close</button>
-     <button class="btn primary" onclick="App.closeModal();App.connectSync(false)">🔗 Connect existing file</button>`);
+      <li>Done — everyone's uploads now appear here live, and yours appear for them.</li>
+    </ol>
+    ${isAdmin() ? '<p style="font-size:12px;color:var(--muted);margin-top:10px">Admin: if the file doesn\'t exist yet, use <b>Create team DB file</b> to make it inside the shared folder.</p>' : ''}
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Until connected, audits are held on this PC only and merge into the team database as soon as you connect.</p>`,
+    `<button class="btn" onclick="App.closeModal()">Later</button>
+     ${isAdmin() ? '<button class="btn" onclick="App.closeModal();App.connectSync(true)">Create team DB file…</button>' : ''}
+     <button class="btn primary" onclick="App.closeModal();App.connectSync(false)">🔗 Connect EQMS_TeamDB.json</button>`);
 }
 
 /* ================================================================
@@ -1091,7 +1120,7 @@ function viewAudit(a){
       ${di('Agent', a.agentName + (a.agentEid ? ' · EID '+a.agentEid : ''))}${di('Agent Email', a.agentEmail)}
       ${di('Team Leader', a.teamLeader)}${di('TL Email', a.tlEmail)}
       ${di('Operations Manager', a.om)}${di('OM Email', a.omEmail)}
-      ${di('LOB / Account', a.lob)}${di('Region', a.region)}
+      ${di('LOB / Account', a.lob)}${di('Queue / Channel', a.queue)}
       ${di('Case Number', a.caseNumber)}${di('Genesys ID / URL', a.genesysId)}
       ${di('Case Resolution (as tagged)', a.caseResolution, true)}
       ${di('Expected Resolution Code', a.expectedCode, true)}
@@ -1140,8 +1169,8 @@ function confirmDelete(id){
    ================================================================ */
 function populateCodeSelects(){
   $('#fResolution').innerHTML = '<option value="Valid (Pass)">Valid (Pass)</option>'
-    + settings.invalidResolutions.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  $('#fExpected').innerHTML = settings.expectedCodes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    + settings.invalidReasons.map(c => `<option value="${esc(c)}">${esc(c) + (/invalid/i.test(c)?'':' — Invalid')}</option>`).join('');
+  $('#fExpected').innerHTML = settings.validReasons.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 }
 function renderForm(){
   populateCodeSelects();
@@ -1179,12 +1208,12 @@ function selectAgent(a){
   $('#fAgent').value = a.agentName + (a.agentEid ? ' · ' + a.agentEid : '');
   $('#fTL').value = a.teamLeader||''; $('#fOM').value = a.om||'';
   $('#fTLEmail').value = a.tlEmail||''; $('#fOMEmail').value = a.omEmail||'';
-  $('#fLOB').value = a.lob||'';
+  $('#fLOB').value = a.lob||''; $('#fQueue').value = a.queue||'';
   $('#acList').style.display='none';
 }
 function clearAgent(){
   selectedAgent = null;
-  ['fTL','fOM','fTLEmail','fOMEmail','fLOB'].forEach(id => $('#'+id).value='');
+  ['fTL','fOM','fTLEmail','fOMEmail','fLOB','fQueue'].forEach(id => $('#'+id).value='');
 }
 function quickAddAgent(){
   openModal('＋ Quick Add Agent', `
@@ -1198,6 +1227,7 @@ function quickAddAgent(){
       <div class="field"><label>Operations Manager</label><input id="qaOM" type="text"></div>
       <div class="field"><label>OM Email</label><input id="qaOMEmail" type="email"></div>
       <div class="field"><label>LOB / Account</label><input id="qaLOB" type="text" value="HP"></div>
+      <div class="field"><label>Queue / Channel</label><input id="qaQueue" type="text"></div>
     </div>`,
     `<button class="btn" onclick="App.closeModal()">Cancel</button>
      <button class="btn primary" onclick="App.saveQuickAgent()">Save Agent</button>`);
@@ -1208,7 +1238,8 @@ function saveQuickAgent(){
   const a = { agentName:name, agentEid:$('#qaEid').value.trim(), agentEmail:$('#qaEmail').value.trim(),
     teamLeader:$('#qaTL').value.trim(), om:$('#qaOM').value.trim(),
     tlEmail:$('#qaTLEmail').value.trim(), omEmail:$('#qaOMEmail').value.trim(),
-    lob:$('#qaLOB').value.trim(), region:'', source:'quick-add' };
+    lob:$('#qaLOB').value.trim(), queue:$('#qaQueue').value.trim(), region:'',
+    som:'', somEmail:'', source:'quick-add' };
   master.agents.push(a); master.updatedAt = nowIso();
   save(LS.master, master); markDirty();
   logAction('QUICK_ADD_AGENT', name);
@@ -1244,6 +1275,7 @@ function submitAudit(){
     teamLeader: $('#fTL').value.trim(), om: $('#fOM').value.trim(),
     tlEmail: $('#fTLEmail').value.trim(), omEmail: $('#fOMEmail').value.trim(),
     region: selectedAgent ? (selectedAgent.region||'') : '', lob: $('#fLOB').value.trim(),
+    queue: $('#fQueue').value.trim(),
     auditorName: session.name, auditorEmail: session.email,
     caseNumber, genesysId: genesys,
     caseResolution: res, expectedCode: $('#fExpected').value,
@@ -1280,9 +1312,9 @@ function startEdit(a){
   $('#editBanner').classList.add('show');
   $('#fAgent').value = a.agentName + (a.agentEid ? ' · '+a.agentEid : '');
   selectedAgent = { agentName:a.agentName, agentEid:a.agentEid, agentEmail:a.agentEmail,
-    teamLeader:a.teamLeader, om:a.om, tlEmail:a.tlEmail, omEmail:a.omEmail, region:a.region, lob:a.lob };
+    teamLeader:a.teamLeader, om:a.om, tlEmail:a.tlEmail, omEmail:a.omEmail, region:a.region, lob:a.lob, queue:a.queue };
   $('#fTL').value=a.teamLeader||''; $('#fOM').value=a.om||''; $('#fTLEmail').value=a.tlEmail||'';
-  $('#fOMEmail').value=a.omEmail||''; $('#fLOB').value=a.lob||'';
+  $('#fOMEmail').value=a.omEmail||''; $('#fLOB').value=a.lob||''; $('#fQueue').value=a.queue||'';
   $('#fDate').value=a.date; $('#fCase').value=a.caseNumber; $('#fGenesys').value=a.genesysId;
   $('#fRemarks').value=a.remarks;
   populateCodeSelects();
@@ -1366,19 +1398,33 @@ function renderAnalytics(){
     label:r.tl, value:r.total, extra:fmtPct(r.rate)+' pass',
     color:r.rate >= settings.passTarget ? 'var(--good)' : 'var(--bad)',
     tip:`${r.tl}: ${r.total} audits · ${fmtPct(r.rate)} pass (target ${settings.passTarget}%)`})));
+  renderDefectDistribution($('#anaCodes'), list);
+}
+function renderDefectDistribution(container, list){
+  const invalids = list.filter(a => a.validation === 'Invalid');
   const byCode = {};
-  list.forEach(a => { const k=a.expectedCode||'—'; byCode[k]=(byCode[k]||0)+1; });
-  hBars($('#anaCodes'), Object.entries(byCode).sort((x,y)=>y[1]-x[1]).slice(0,10)
-    .map(([k,v])=>({label:k, value:v, extra:fmtPct(pct(v,list.length)), color:'var(--accent)'})));
+  invalids.forEach(a => { const k = a.caseResolution || '(unspecified)'; byCode[k] = (byCode[k]||0)+1; });
+  const rows = Object.entries(byCode).sort((x,y)=>y[1]-x[1]);
+  container.innerHTML = rows.length ? rows.map(([k,v]) => `
+    <div class="defrow">
+      <span class="deflbl">${esc(k)}</span>
+      <span class="defpill">${v} defect${v===1?'':'s'} (${fmtPct(pct(v, invalids.length))})</span>
+    </div>`).join('')
+    : '<div class="empty">No invalid audits in the selected timeframe — no defects to distribute. 🎉</div>';
 }
 
-const CSV_HEADERS = ['Audit ID','Date','Auditor Name','Auditor Email','Agent','Agent EID','Agent Email',
-  'Team Leader','Operations Manager','TL Email','OM Email','Region','LOB','Case Number',
-  'Genesys Transaction ID','Validation','Case Resolution (Tagged)','Expected Resolution Code',
-  'Remarks','Quick Case','Email Sent','Created At','Updated At'];
-const auditCsvRow = a => [a.id,a.date,a.auditorName,a.auditorEmail,a.agentName,a.agentEid,a.agentEmail,
-  a.teamLeader,a.om,a.tlEmail,a.omEmail,a.region,a.lob,a.caseNumber,a.genesysId,a.validation,
-  a.caseResolution,a.expectedCode,a.remarks,isQuickCase(a)?'Yes':'No',a.emailSent,a.createdAt,a.updatedAt];
+/* Column layout matches the production Excel/PowerBI workbook; extra
+   traceability columns are appended after createdAt. */
+const CSV_HEADERS = ['auditId','auditDate','agentName','agentEid','agentEmail','teamLeader','tlEmail',
+  'operationsManager','omEmail','caseNumber','genesysTransactionId','queue','lob','validation','reason',
+  'remarks','auditorName','createdAt',
+  'expectedResolutionCode','quickCase','emailSent','auditorEmail','updatedAt'];
+/* reason = valid case reason for Valid audits, invalid defect reason for Invalid ones */
+const auditReason = a => a.validation === 'Valid' ? a.expectedCode : a.caseResolution;
+const auditCsvRow = a => [a.id,a.date,a.agentName,a.agentEid,a.agentEmail,a.teamLeader,a.tlEmail,
+  a.om,a.omEmail,a.caseNumber,a.genesysId,a.queue||'',a.lob,a.validation,auditReason(a),
+  a.remarks,a.auditorName,a.createdAt,
+  a.expectedCode,isQuickCase(a)?'Yes':'No',a.emailSent,a.auditorEmail,a.updatedAt];
 
 function exportCsv(kind){
   let list, name;
@@ -1393,12 +1439,12 @@ function exportCsv(kind){
   logAction('EXPORT_CSV', kind + ' (' + list.length + ' rows)');
   toast('Exported ' + list.length + ' audits.','good');
 }
-const ML_HEADERS = ['Agent Name','Agent EID','Agent Email','Team Leader','Operations Manager','Region','LOB','TL Email','OM Email'];
+const ML_HEADERS = ['EmployeeNumber','FullName','Email','ImmediateSupervisor','ImmediateSupervisorEmail','Manager','ManagerEmail','SOM','SOMEmail','CHANNEL','Internal LOB'];
+const agentRosterRow = a => [a.agentEid,a.agentName,a.agentEmail,a.teamLeader,a.tlEmail,a.om,a.omEmail,a.som||'',a.somEmail||'',a.queue||'',a.lob||''];
 function exportMasterlist(){
-  if (!master.agents.length) { toast('Masterlist is empty.','warn'); return; }
-  download('EQMS_Masterlist_' + todayIso() + '.csv',
-    toCsv([ML_HEADERS, ...master.agents.map(a=>[a.agentName,a.agentEid,a.agentEmail,a.teamLeader,a.om,a.region,a.lob,a.tlEmail,a.omEmail])]),
-    'text/csv;charset=utf-8');
+  if (!master.agents.length) { toast('Roster is empty.','warn'); return; }
+  download('EQMS_Roster_' + todayIso() + '.csv',
+    toCsv([ML_HEADERS, ...master.agents.map(agentRosterRow)]), 'text/csv;charset=utf-8');
 }
 function exportBackup(){
   download('EQMS_Backup_' + todayIso() + '.json',
@@ -1425,17 +1471,20 @@ function parseCsv(text){
   return rows;
 }
 const HDR_SYNONYMS = {
-  agentName:['agentname','name','agent','fullname','employeename'],
-  agentEid:['agenteid','eid','employeeid','employeenumber','empid','idnumber'],
-  agentEmail:['agentemail','email','emailaddress'],
-  teamLeader:['teamleader','tl','supervisor','tlname','teamlead'],
-  om:['operationsmanager','om','opsmanager','manager','omname'],
+  agentName:['fullname','agentname','name','agent','employeename'],
+  agentEid:['employeenumber','agenteid','eid','employeeid','empid','idnumber'],
+  agentEmail:['email','agentemail','emailaddress'],
+  teamLeader:['immediatesupervisor','teamleader','tl','supervisor','tlname','teamlead'],
+  tlEmail:['immediatesupervisoremail','tlemail','teamleaderemail','supervisoremail'],
+  om:['manager','operationsmanager','om','opsmanager','omname'],
+  omEmail:['manageremail','omemail','operationsmanageremail'],
+  som:['som','senioroperationsmanager'],
+  somEmail:['somemail','seniooperationsmanageremail','seniormanageremail'],
+  queue:['channel','queue','queuechannel'],
+  lob:['internallob','lob','account','lineofbusiness','program','wdlob'],
   region:['region','site','location'],
-  lob:['lob','account','lineofbusiness','program','wdlob'],
-  tlEmail:['tlemail','teamleaderemail','supervisoremail'],
-  omEmail:['omemail','operationsmanageremail','manageremail'],
 };
-function importMasterlistText(text){
+function importMasterlistText(text, sourceName){
   const rows = parseCsv(text);
   if (rows.length < 2) { toast('Could not read any data rows. Paste/upload CSV with a header row.','bad'); return; }
   const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -1448,60 +1497,91 @@ function importMasterlistText(text){
     const g = k => cols[k] >= 0 ? String(r[cols[k]]||'').trim() : '';
     const name = g('agentName'); if (!name) continue;
     agents.push({ agentName:name, agentEid:g('agentEid'), agentEmail:g('agentEmail'),
-      teamLeader:g('teamLeader'), om:g('om'), region:g('region'), lob:g('lob'),
-      tlEmail:g('tlEmail'), omEmail:g('omEmail') });
+      teamLeader:g('teamLeader'), tlEmail:g('tlEmail'), om:g('om'), omEmail:g('omEmail'),
+      som:g('som'), somEmail:g('somEmail'), queue:g('queue'), lob:g('lob'), region:g('region') });
   }
   if (!agents.length) { toast('Header recognized but no agent rows found.','bad'); return; }
-  master = { updatedAt: nowIso(), agents };
+  master = { updatedAt: nowIso(), agents, source: sourceName || 'pasted CSV' };
   save(LS.master, master); markDirty();
   logAction('IMPORT_MASTERLIST', agents.length + ' agents');
   renderAdmin(); renderForm();
   toast(agents.length + ' agents imported into the shared masterlist.','good');
 }
 
+function reasonChips(list){
+  return `<div class="taglist" style="max-height:130px;overflow-y:auto;margin-bottom:10px">${
+    list.map(r=>`<span class="tag">${esc(r)}</span>`).join('')}</div>`;
+}
 function renderAdmin(){
   if (!isAdmin()) { $('#adminGrid').innerHTML = '<div class="card">Restricted.</div>'; return; }
   const g = $('#adminGrid');
   g.innerHTML = `
-  <div class="card">
-    <h3>🔗 Team Live Sync (shared database)</h3>
+  <div class="card" style="grid-column:1/-1">
+    <h3>☁️ Team Database — Microsoft 365 live sync</h3>
     <p style="font-size:12.5px;color:var(--text2);line-height:1.65;margin-bottom:10px">
-      One shared <b>EQMS_TeamDB.json</b> file in a SharePoint / OneDrive-synced folder is the team database.
-      Every auditor connects their copy of this HTML file to it once; the app then merges all uploads automatically
-      every 10 seconds — no server needed, works within Concentrix restrictions.</p>
-    <div class="kv"><label>Status</label><b>${syncHandle ? (syncError ? '⚠ ' + (syncError==='perm'?'Needs re-authorization':'Error') : '🟢 Connected: '+esc(syncHandle.name)) : '⚪ Not connected (local only)'}</b></div>
-    <div class="kv"><label>Last sync</label><b>${lastSync ? lastSync.toLocaleTimeString() : '—'}</b></div>
+      The team database is one <b>EQMS_TeamDB.json</b> file stored in your SharePoint / OneDrive team folder.
+      Microsoft 365 replicates it to every auditor's PC; each copy of the app auto-merges it every
+      <b>5 seconds</b>, so submissions, edits, roster and settings changes appear for everyone automatically.</p>
+    <div class="kv"><label>Status</label><b>${syncHandle ? (syncError ? '⚠ ' + (syncError==='perm'?'Needs re-authorization (click the pill top-right)':'Error: '+esc(syncError)) : '🟢 LIVE — connected to '+esc(syncHandle.name)) : '🔴 NOT CONNECTED — audits stay on this PC until connected'}</b></div>
+    <div class="kv"><label>Last merge</label><b>${lastSync ? lastSync.toLocaleTimeString() : '—'}</b></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn primary sm" onclick="App.connectSync(true)">Create team DB file…</button>
+      <button class="btn primary sm" onclick="App.connectSync(true)">Create team DB file in the shared folder…</button>
       <button class="btn sm" onclick="App.connectSync(false)">Connect existing file…</button>
-      <button class="btn sm" onclick="App.syncNow(true)">Sync now</button>
+      <button class="btn sm" onclick="App.syncNow(true)">Merge now</button>
       ${syncHandle?'<button class="btn danger sm" onclick="App.disconnectSync()">Disconnect</button>':''}
     </div>
-    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Setup: create the file inside your team's synced SharePoint folder → share the folder with all auditors → each auditor clicks the sync pill (top right) → Connect. Requires Chrome or Edge.</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">One-time setup: create the file inside the SharePoint folder that all 14+ auditors sync in OneDrive → each auditor is prompted to connect it at first sign-in. Requires Chrome or Edge.</p>
   </div>
 
   <div class="card">
-    <h3>👥 Agent Masterlist <span class="cap">${master.agents.length} agents${master.updatedAt?' · updated '+fmtDateTime(master.updatedAt):''}</span></h3>
-    <p style="font-size:12.5px;color:var(--text2);margin-bottom:10px">Import your Excel masterlist (save as CSV). Recognized columns:
-      Agent Name, Agent EID, Agent Email, Team Leader, Operations Manager, Region, LOB, TL Email, OM Email.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <button class="btn primary sm" onclick="document.getElementById('mlFile').click()">📤 Upload CSV…</button>
-      <input type="file" id="mlFile" accept=".csv,text/csv" style="display:none">
-      <button class="btn sm" onclick="App.exportMasterlist()">📥 Export current</button>
-      <button class="btn sm" onclick="App.downloadMlTemplate()">📄 Download template</button>
-      ${master.agents.length?'<button class="btn danger sm" onclick="App.clearMasterlist()">Clear masterlist</button>':''}
+    <h3>👥 Agent Masterlist Roster</h3>
+    <p style="font-size:12.5px;color:var(--text2);margin-bottom:4px"><b>${master.agents.length} agents registered</b>${master.source?' · Source: '+esc(master.source):''}</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Last import timestamp: ${master.updatedAt ? esc(new Date(master.updatedAt).toLocaleString()) : '—'}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn primary sm" onclick="App.openAgentEditor()">＋ Add / Edit Agent Manually</button>
+      <button class="btn sm" onclick="App.exportMasterlist()">📥 Export Roster CSV</button>
+      ${master.agents.length?'<button class="btn danger sm" onclick="App.clearMasterlist()">🗑 Clear Roster</button>':''}
     </div>
-    <textarea class="list" id="mlPaste" placeholder="…or paste CSV rows here (first line = headers) and click Import Pasted."></textarea>
+    <div class="kv" style="border-top:1px solid var(--border);padding-top:12px">
+      <label>📤 Upload Roster CSV Update</label>
+      <button class="btn sm" onclick="App.downloadMlTemplate()">📄 Download Excel Roster Template</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0 10px">
+      <button class="btn sm" onclick="document.getElementById('mlFile').click()">Choose File…</button>
+      <span style="font-size:12px;color:var(--muted)" id="mlFileName">No file chosen</span>
+      <input type="file" id="mlFile" accept=".csv,text/csv" style="display:none">
+    </div>
+    <p style="font-size:11px;color:var(--muted)">Expected headers: <code>EmployeeNumber, FullName, Email, ImmediateSupervisor, ImmediateSupervisorEmail, Manager, ManagerEmail, SOM, SOMEmail, CHANNEL, Internal LOB</code> (order flexible; common synonyms accepted).</p>
+    <textarea class="list" id="mlPaste" style="margin-top:10px" placeholder="…or paste CSV rows here (first line = headers) and click Import Pasted."></textarea>
     <div style="margin-top:8px"><button class="btn sm" onclick="App.importPastedMl()">Import Pasted</button></div>
   </div>
 
   <div class="card">
-    <h3>🏷️ Resolution Code Lists</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">One per line. These drive both form dropdowns for the whole team.</p>
-    <label style="font-size:12px;font-weight:700">Case Resolution options (invalid taggings)</label>
-    <textarea class="list" id="setInvalidRes">${esc(settings.invalidResolutions.join('\n'))}</textarea>
-    <label style="font-size:12px;font-weight:700;display:block;margin-top:10px">Expected Resolution Codes</label>
-    <textarea class="list" id="setExpected">${esc(settings.expectedCodes.join('\n'))}</textarea>
+    <h3>🛡️ User & Auditor Access Control</h3>
+    <div class="kv"><label>Administrator (fixed)</label>
+      <b>🔒 ${esc(ADMIN_NAME)} — ${esc(ADMIN_EMAIL)}</b></div>
+    <p style="font-size:11.5px;color:var(--muted);margin-bottom:10px">There is exactly one administrator; this cannot be changed from the app.</p>
+    <div class="kv"><label>Restrict sign-in to the authorized auditor list below</label>
+      <input type="checkbox" id="setRestrict" ${settings.restrictLogin?'checked':''}></div>
+    <label style="font-size:12px;font-weight:700;display:block;margin-top:8px">Authorized auditor emails (one per line)</label>
+    <textarea class="list" id="setUsers">${esc(settings.authorizedUsers.join('\n'))}</textarea>
+    <div style="margin-top:10px"><button class="btn primary sm" onclick="App.saveAccessControl()">💾 Save Access Control</button></div>
+  </div>
+
+  <div class="card">
+    <h3>📋 Invalid Defect Reasons Repository</h3>
+    ${reasonChips(settings.invalidReasons)}
+    <label style="font-size:12px;font-weight:700">Edit invalid reasons (one per line):</label>
+    <textarea class="list" id="setInvalidRes">${esc(settings.invalidReasons.join('\n'))}</textarea>
+    <div style="margin-top:10px"><button class="btn primary sm" onclick="App.saveInvalidReasons()">💾 Save Invalid Reasons</button></div>
+  </div>
+
+  <div class="card">
+    <h3>✔️ Valid Case Reasons Repository</h3>
+    ${reasonChips(settings.validReasons)}
+    <label style="font-size:12px;font-weight:700">Edit valid reasons (one per line):</label>
+    <textarea class="list" id="setValidRes">${esc(settings.validReasons.join('\n'))}</textarea>
+    <div style="margin-top:10px"><button class="btn sm" style="background:var(--good);border-color:var(--good);color:#fff" onclick="App.saveValidReasons()">💾 Save Valid Reasons</button></div>
   </div>
 
   <div class="card">
@@ -1512,18 +1592,7 @@ function renderAdmin(){
       <input style="flex:1" type="text" id="setEmailCc" value="${esc(settings.emailCc)}" placeholder="qa-team@concentrix.com; lead@concentrix.com"></div>
     <div class="kv"><label style="min-width:110px">Subject template</label>
       <input style="flex:1" type="text" id="setEmailSubject" value="${esc(settings.emailSubject)}"></div>
-    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Drafts open in Outlook addressed to the agent's TL + OM with the full audit summary — the auditor just presses Send.
-    For fully hands-free sending, pair the team DB/CSV exports with a Power Automate flow (see README notes).</p>
-  </div>
-
-  <div class="card">
-    <h3>🧑‍✈️ Users & Access</h3>
-    <div class="kv"><label style="min-width:110px">Administrator email</label>
-      <input style="flex:1" type="email" id="setAdminEmail" value="${esc(settings.adminEmail)}"></div>
-    <div class="kv"><label>Restrict sign-in to authorized auditors only</label>
-      <input type="checkbox" id="setRestrict" ${settings.restrictLogin?'checked':''}></div>
-    <label style="font-size:12px;font-weight:700;display:block;margin-top:8px">Authorized auditor emails (one per line)</label>
-    <textarea class="list" id="setUsers">${esc(settings.authorizedUsers.join('\n'))}</textarea>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Drafts open in Outlook addressed to the agent's TL + OM with the full audit summary — the auditor just presses Send.</p>
   </div>
 
   <div class="card">
@@ -1532,7 +1601,7 @@ function renderAdmin(){
     <div class="kv"><label style="min-width:130px">CDAX Guidelines URL</label><input style="flex:1" type="url" id="setCdax" value="${esc(settings.cdaxUrl)}" placeholder="https://…"></div>
     <div class="kv"><label style="min-width:130px">Instant Ink Matrix URL</label><input style="flex:1" type="url" id="setInk" value="${esc(settings.inkUrl)}" placeholder="https://…"></div>
     <div class="kv"><label style="min-width:130px">TL pass-rate target %</label><input type="number" min="0" max="100" id="setTarget" value="${esc(settings.passTarget)}" style="width:90px"></div>
-    <div style="margin-top:12px"><button class="btn primary" onclick="App.saveAdminSettings()">💾 Save All Settings (syncs to team)</button></div>
+    <div style="margin-top:12px"><button class="btn primary sm" onclick="App.saveAdminSettings()">💾 Save Settings (syncs to team)</button></div>
   </div>
 
   <div class="card">
@@ -1542,9 +1611,9 @@ function renderAdmin(){
       <button class="btn sm" onclick="document.getElementById('restoreFile').click()">Import / merge backup…</button>
       <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
       <button class="btn sm" onclick="App.loadSampleData()">Load sample demo data</button>
-      <button class="btn danger sm" onclick="App.wipeLocal()">Wipe THIS device's local data</button>
+      <button class="btn danger sm" onclick="App.wipeLocal()">Reset this PC's cache</button>
     </div>
-    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Wipe only clears this browser — the shared team DB file is untouched. Reconnect to it to re-download everything.</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">The team DB file in SharePoint is the system of record. Reset only clears this PC's cache — reconnect to the team DB to re-download everything.</p>
   </div>
 
   <div class="card" style="grid-column:1/-1">
@@ -1557,7 +1626,8 @@ function renderAdmin(){
 
   $('#mlFile').addEventListener('change', e => {
     const f = e.target.files[0]; if (!f) return;
-    f.text().then(importMasterlistText).catch(err => toast('Read failed: '+err.message,'bad'));
+    $('#mlFileName').textContent = f.name;
+    f.text().then(t => importMasterlistText(t, f.name)).catch(err => toast('Read failed: '+err.message,'bad'));
     e.target.value = '';
   });
   $('#restoreFile').addEventListener('change', e => {
@@ -1573,36 +1643,109 @@ function renderAdmin(){
     e.target.value = '';
   });
 }
-function importPastedMl(){ const t = $('#mlPaste').value; if (!t.trim()) { toast('Paste CSV first.','warn'); return; } importMasterlistText(t); }
+function importPastedMl(){ const t = $('#mlPaste').value; if (!t.trim()) { toast('Paste CSV first.','warn'); return; } importMasterlistText(t, 'pasted CSV'); }
 function downloadMlTemplate(){
-  download('EQMS_Masterlist_Template.csv', toCsv([ML_HEADERS,
-    ['Bhardwaj, Sundeep','101688555','sundeep.bhardwaj@concentrix.com','Chan, Caroline','Chan, Caroline','PH','HP','caroline.chan@concentrix.com','caroline.chan@concentrix.com']]),
+  download('eqms-roster-template.csv', toCsv([ML_HEADERS,
+    ['101688555','Bhardwaj, Sundeep','sundeep.bhardwaj@concentrix.com','Chan, Caroline','caroline.chan@concentrix.com','Chan, Caroline','caroline.chan@concentrix.com','','','Voice','HP Mainstream']]),
     'text/csv;charset=utf-8');
 }
 function clearMasterlist(){
-  master = { updatedAt: nowIso(), agents: [] };
+  master = { updatedAt: nowIso(), agents: [], source:'' };
   save(LS.master, master); markDirty(); renderAdmin(); renderForm();
-  toast('Masterlist cleared (for the whole team on next sync).','warn');
+  toast('Roster cleared (for the whole team on next sync).','warn');
+}
+function commitSettings(what){
+  settings.updatedAt = nowIso();
+  save(LS.settings, settings); markDirty();
+  logAction('SAVE_SETTINGS', what);
+  populateCodeSelects(); renderTopActions();
+  toast(what + ' saved — live for the whole team within seconds.','good');
+}
+const _lines = id => $(id).value.split('\n').map(s=>s.trim()).filter(Boolean);
+function saveInvalidReasons(){
+  const v = _lines('#setInvalidRes');
+  if (!v.length) { toast('The invalid reasons list cannot be empty.','bad'); return; }
+  settings.invalidReasons = v; commitSettings('Invalid Defect Reasons'); renderAdmin();
+}
+function saveValidReasons(){
+  const v = _lines('#setValidRes');
+  if (!v.length) { toast('The valid reasons list cannot be empty.','bad'); return; }
+  settings.validReasons = v; commitSettings('Valid Case Reasons'); renderAdmin();
+}
+function saveAccessControl(){
+  settings.restrictLogin = $('#setRestrict').checked;
+  settings.authorizedUsers = _lines('#setUsers');
+  commitSettings('Access control');
 }
 function saveAdminSettings(){
-  const lines = id => $(id).value.split('\n').map(s=>s.trim()).filter(Boolean);
-  settings.invalidResolutions = lines('#setInvalidRes');
-  settings.expectedCodes = lines('#setExpected');
   settings.emailEnabled = $('#setEmailEnabled').checked;
   settings.emailCc = $('#setEmailCc').value.trim();
   settings.emailSubject = $('#setEmailSubject').value.trim() || defaultSettings().emailSubject;
-  settings.adminEmail = $('#setAdminEmail').value.trim() || settings.adminEmail;
-  settings.restrictLogin = $('#setRestrict').checked;
-  settings.authorizedUsers = lines('#setUsers');
   settings.orgName = $('#setOrg').value.trim() || settings.orgName;
   settings.cdaxUrl = $('#setCdax').value.trim();
   settings.inkUrl = $('#setInk').value.trim();
   settings.passTarget = Math.max(0, Math.min(100, +$('#setTarget').value || 90));
-  settings.updatedAt = nowIso();
-  save(LS.settings, settings); markDirty();
-  logAction('SAVE_SETTINGS','');
-  populateCodeSelects(); renderTopActions();
-  toast('Settings saved — will reach the team on next sync.','good');
+  commitSettings('Email & general settings');
+}
+
+/* ---- manual roster editor (Add / Edit Agent Manually) ---- */
+function openAgentEditor(agentIdx){
+  const a = agentIdx >= 0 ? master.agents[agentIdx] : {};
+  const f = (id,l,v,ph) => `<div class="field"><label>${l}</label><input id="${id}" type="text" value="${esc(v||'')}" placeholder="${ph||''}"></div>`;
+  openModal(agentIdx >= 0 ? '✏️ Edit Agent' : '＋ Add Agent Manually', `
+    ${agentIdx >= 0 ? '' : `<div class="field" style="margin-bottom:12px"><label>Search existing agent to edit (or fill the fields to add a new one)</label>
+      <input id="aeSearch" type="text" placeholder="Type a name or EID…" autocomplete="off">
+      <div id="aeResults"></div></div>`}
+    <div class="formgrid">
+      ${f('aeEid','EmployeeNumber',a.agentEid)}
+      ${f('aeName','FullName *',a.agentName)}
+      ${f('aeEmail','Email',a.agentEmail)}
+      ${f('aeTL','ImmediateSupervisor',a.teamLeader)}
+      ${f('aeTLEmail','ImmediateSupervisorEmail',a.tlEmail)}
+      ${f('aeOM','Manager',a.om)}
+      ${f('aeOMEmail','ManagerEmail',a.omEmail)}
+      ${f('aeSOM','SOM',a.som)}
+      ${f('aeSOMEmail','SOMEmail',a.somEmail)}
+      ${f('aeQueue','CHANNEL / Queue',a.queue)}
+      ${f('aeLOB','Internal LOB',a.lob,'HP Mainstream')}
+    </div>`,
+    `<button class="btn" onclick="App.closeModal()">Cancel</button>
+     ${agentIdx >= 0 ? `<button class="btn danger" onclick="App.deleteAgent(${agentIdx})">🗑 Remove Agent</button>` : ''}
+     <button class="btn primary" onclick="App.saveAgentManual(${agentIdx >= 0 ? agentIdx : -1})">💾 Save to Roster</button>`);
+  if (agentIdx === undefined || agentIdx < 0) {
+    const box = $('#aeSearch');
+    if (box) box.addEventListener('input', () => {
+      const q = box.value.trim().toLowerCase();
+      const hits = q.length < 2 ? [] : master.agents
+        .map((ag,i)=>({ag,i}))
+        .filter(({ag}) => (ag.agentName||'').toLowerCase().includes(q) || (ag.agentEid||'').toLowerCase().includes(q))
+        .slice(0,6);
+      $('#aeResults').innerHTML = hits.map(({ag,i}) =>
+        `<button class="btn sm" style="margin:4px 4px 0 0" onclick="App.openAgentEditor(${i})">${esc(ag.agentName)} · ${esc(ag.agentEid||'—')}</button>`).join('');
+    });
+  }
+}
+function saveAgentManual(idx){
+  const g = id => $('#'+id).value.trim();
+  const name = g('aeName');
+  if (!name) { toast('FullName is required.','bad'); return; }
+  const rec = { agentName:name, agentEid:g('aeEid'), agentEmail:g('aeEmail'),
+    teamLeader:g('aeTL'), tlEmail:g('aeTLEmail'), om:g('aeOM'), omEmail:g('aeOMEmail'),
+    som:g('aeSOM'), somEmail:g('aeSOMEmail'), queue:g('aeQueue'), lob:g('aeLOB'), region:'' };
+  if (idx >= 0) master.agents[idx] = rec; else master.agents.push(rec);
+  master.updatedAt = nowIso(); master.source = master.source || 'manual entry';
+  save(LS.master, master); markDirty();
+  logAction(idx >= 0 ? 'EDIT_AGENT' : 'ADD_AGENT', name);
+  closeModal(); renderAdmin(); renderForm();
+  toast('Roster updated — live for the whole team.','good');
+}
+function deleteAgent(idx){
+  const a = master.agents[idx]; if (!a) return;
+  master.agents.splice(idx,1); master.updatedAt = nowIso();
+  save(LS.master, master); markDirty();
+  logAction('DELETE_AGENT', a.agentName);
+  closeModal(); renderAdmin(); renderForm();
+  toast(a.agentName + ' removed from roster.','warn');
 }
 function wipeLocal(){
   openModal('⚠ Wipe local data', '<p style="font-size:13.5px;line-height:1.6">This deletes all EQMS data stored in <b>this browser only</b> (audits, masterlist, settings, session). The shared team DB file is NOT touched. Continue?</p>',
@@ -1611,10 +1754,10 @@ function wipeLocal(){
 }
 function loadSampleData(){
   if (!master.agents.length) {
-    master = { updatedAt: nowIso(), agents: [
-      {agentName:'Belgica, Jessa Sarmiento', agentEid:'102220859', agentEmail:'jessa.belgica@concentrix.com', teamLeader:'Sernal, Rachelle Ibiernas', om:'Chan, Caroline', region:'PH', lob:'HP', tlEmail:'rachelle.sernal@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
-      {agentName:'Bhardwaj, Sundeep Taneza', agentEid:'101688555', agentEmail:'sundeep.bhardwaj@concentrix.com', teamLeader:'Chan, Caroline Cruce', om:'Chan, Caroline Cruce', region:'PH', lob:'HP', tlEmail:'caroline.chan@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
-      {agentName:'Dela Cruz, Juan Miguel', agentEid:'103300111', agentEmail:'juan.delacruz@concentrix.com', teamLeader:'Reyes, Maria Lourdes', om:'Chan, Caroline', region:'PH', lob:'HP', tlEmail:'maria.reyes@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+    master = { updatedAt: nowIso(), source: 'sample data', agents: [
+      {agentName:'Belgica, Jessa Sarmiento', agentEid:'102220859', agentEmail:'jessa.belgica@concentrix.com', teamLeader:'Sernal, Rachelle Ibiernas', om:'Chan, Caroline', som:'', somEmail:'', queue:'Voice', region:'PH', lob:'HP Mainstream', tlEmail:'rachelle.sernal@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+      {agentName:'Bhardwaj, Sundeep Taneza', agentEid:'101688555', agentEmail:'sundeep.bhardwaj@concentrix.com', teamLeader:'Chan, Caroline Cruce', om:'Chan, Caroline Cruce', som:'', somEmail:'', queue:'Voice', region:'PH', lob:'HP Mainstream', tlEmail:'caroline.chan@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+      {agentName:'Dela Cruz, Juan Miguel', agentEid:'103300111', agentEmail:'juan.delacruz@concentrix.com', teamLeader:'Reyes, Maria Lourdes', om:'Chan, Caroline', som:'', somEmail:'', queue:'Chat', region:'PH', lob:'HP Mainstream', tlEmail:'maria.reyes@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
     ]};
     save(LS.master, master);
   }
@@ -1623,7 +1766,7 @@ function loadSampleData(){
     const date = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     const ag = master.agents[agentIdx % master.agents.length];
     const a = { id: nextAuditId(), date, agentName:ag.agentName, agentEid:ag.agentEid, agentEmail:ag.agentEmail,
-      teamLeader:ag.teamLeader, om:ag.om, tlEmail:ag.tlEmail, omEmail:ag.omEmail, region:ag.region, lob:ag.lob,
+      teamLeader:ag.teamLeader, om:ag.om, tlEmail:ag.tlEmail, omEmail:ag.omEmail, region:ag.region, lob:ag.lob, queue:ag.queue,
       auditorName: session.name, auditorEmail: session.email,
       caseNumber: String(5039980000 + Math.floor(Math.random()*9999)),
       genesysId: 'GEN-' + Math.random().toString(36).slice(2,10).toUpperCase(),
@@ -1633,13 +1776,13 @@ function loadSampleData(){
     audits.push(a);
   };
   mk(0,0,'Valid (Pass)','Remote Solution (HW/SW Resolved Remotely via Troubleshooting)');
-  mk(0,1,'Quick Case (Invalid)','Referred – for Hardware Service');
-  mk(1,2,'Onsite Solution (Invalid)','Parts Shipped (CSR Part / RC Whole Unit)');
+  mk(0,1,'Quick Case (Invalid)','Referred – for Hardware Service (ASP / 3rd Party HW / DOA)');
+  mk(1,2,'Onsite Solution (Break & Fix / Installation Work Order)','Parts Shipped (CSR Part / RCD Media / Instant Ink PO)');
   mk(2,0,'Valid (Pass)','Quick Case');
-  mk(3,1,'Parts Shipped (Invalid)','Onsite Solution (Break & Fix / Onsite Repair)');
-  mk(5,2,'Referred – for Hardware Service (Invalid)','Exchange Solution (Whole Unit Exchange)');
+  mk(3,1,'Parts Shipped (CSR Part / RCD Media / Instant Ink PO)','Onsite Solution (Break & Fix / Installation Work Order)');
+  mk(5,2,'No Support Provided (Security Stop/Hold / Global Trade Fail)','Exchange Solution (Whole Unit Exchange Arranged)');
   mk(6,0,'Quick Case (Invalid)','Remote Solution (HW/SW Resolved Remotely via Troubleshooting)');
-  mk(8,1,'Valid (Pass)','Onsite Solution (Break & Fix / Onsite Repair)');
+  mk(8,1,'Valid (Pass)','Onsite Solution (Break & Fix / Installation Work Order)');
   audits = sortAudits(audits);
   save(LS.audits, audits); markDirty(); render();
   toast('Sample data loaded — delete rows or wipe local data to remove.','good');
@@ -1712,6 +1855,8 @@ return {
   submitAudit, clearForm, cancelEdit, closeModal,
   confirmDelete, exportCsv, exportMasterlist, exportBackup,
   importPastedMl, downloadMlTemplate, clearMasterlist, saveAdminSettings,
+  saveInvalidReasons, saveValidReasons, saveAccessControl,
+  openAgentEditor, saveAgentManual, deleteAgent,
   wipeLocal, loadSampleData,
   copyAuditById: id => { const a = findAudit(id); if (a) copyAudit(a); },
   emailAuditById: id => { const a = findAudit(id); if (a) emailAudit(a, false); closeModal(); },
