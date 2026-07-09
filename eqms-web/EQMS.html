@@ -1,0 +1,1723 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP Mainstream EQMS</title>
+<style>
+/* ============================================================
+   HP Mainstream EQMS — single-file edition
+   Theme tokens (dark default, light override)
+   ============================================================ */
+:root{
+  --bg:#0e1420; --panel:#131a29; --card:#1b2333; --card2:#212b40;
+  --border:#2a3550; --border2:#35426100;
+  --text:#e8ecf4; --text2:#9aa7bf; --muted:#6b7891;
+  --accent:#3987e5; --accent2:#1c5cab;
+  --good:#0ca30c; --bad:#d03b3b; --warn:#c98500;
+  --good-bg:rgba(12,163,12,.12); --bad-bg:rgba(208,59,59,.14); --warn-bg:rgba(201,133,0,.14);
+  --grid:#2c3a55; --shadow:0 6px 24px rgba(0,0,0,.35);
+  --radius:12px;
+}
+html[data-theme="light"]{
+  --bg:#f2f4f8; --panel:#0f2544; --card:#ffffff; --card2:#f1f4fa;
+  --border:#d7deea; --text:#16233a; --text2:#4d5c75; --muted:#7c8aa3;
+  --accent:#2a78d6; --accent2:#1c5cab;
+  --good:#0a8a0a; --bad:#c33232; --warn:#a86e00;
+  --good-bg:rgba(10,138,10,.10); --bad-bg:rgba(195,50,50,.10); --warn-bg:rgba(168,110,0,.12);
+  --grid:#e1e6f0; --shadow:0 6px 20px rgba(20,40,80,.10);
+}
+html[data-theme="light"] .sidebar{ --card:#0f2544; --card2:#16335c; --border:#24446e; --text:#eef3fa; --text2:#a8bcd8; --muted:#7d95b8; }
+
+*{box-sizing:border-box; margin:0; padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+  overflow:hidden;
+}
+button{font:inherit; cursor:pointer}
+input,select,textarea{font:inherit; color:var(--text)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border); border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- app shell ---------- */
+#app{display:flex; height:100vh; width:100vw}
+.sidebar{
+  width:228px; min-width:228px; background:var(--panel); display:flex; flex-direction:column;
+  border-right:1px solid var(--border);
+}
+.brand{padding:18px 16px 14px; border-bottom:1px solid var(--border)}
+.brand h1{font-size:15px; letter-spacing:.2px; display:flex; gap:8px; align-items:center}
+.brand h1 .logo{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#7db4f2);display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.brand p{font-size:11px; color:var(--muted); margin-top:3px}
+nav{flex:1; padding:12px 10px; overflow-y:auto}
+.nav-item{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  background:none; border:0; color:var(--text2); padding:10px 12px; border-radius:9px;
+  font-weight:600; font-size:13px; margin-bottom:2px;
+}
+.nav-item:hover{background:rgba(255,255,255,.05); color:var(--text)}
+.nav-item.active{background:var(--accent2); color:#fff}
+.nav-item .ic{width:18px; text-align:center; opacity:.9}
+.userbox{border-top:1px solid var(--border); padding:14px 16px}
+.userbox .uname{font-weight:700; font-size:13px}
+.userbox .urole{font-size:11px; color:var(--accent); margin:2px 0 10px}
+.userbox .row{display:flex; gap:8px}
+.main{flex:1; display:flex; flex-direction:column; min-width:0}
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 22px; border-bottom:1px solid var(--border); background:var(--bg);
+}
+.topbar h2{font-size:19px}
+.topbar .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.content{flex:1; overflow-y:auto; padding:18px 22px 40px}
+.view{display:none}
+.view.active{display:block}
+
+/* ---------- generic components ---------- */
+.btn{
+  border:1px solid var(--border); background:var(--card); color:var(--text);
+  padding:8px 14px; border-radius:9px; font-weight:600; font-size:13px;
+  display:inline-flex; align-items:center; gap:7px;
+}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.danger{color:var(--bad); border-color:var(--bad)}
+.btn.danger:hover{background:var(--bad-bg)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 10px; font-size:12px; border-radius:7px}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.pill{
+  display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:99px;
+  font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--card); color:var(--text2);
+}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.on .dot{background:var(--good); box-shadow:0 0 6px var(--good)}
+.pill.warn .dot{background:var(--warn)}
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px 18px; box-shadow:var(--shadow);
+}
+.card h3{font-size:13.5px; margin-bottom:12px; display:flex; align-items:center; gap:8px}
+.card h3 .cap{margin-left:auto; font-size:11px; color:var(--muted); font-weight:500}
+.grid{display:grid; gap:14px}
+.badge{display:inline-block; padding:3px 11px; border-radius:99px; font-size:11.5px; font-weight:700; border:1px solid}
+.badge.valid{color:var(--good); background:var(--good-bg); border-color:var(--good)}
+.badge.invalid{color:var(--bad); background:var(--bad-bg); border-color:var(--bad)}
+.badge.qc{color:var(--warn); background:var(--warn-bg); border-color:var(--warn)}
+
+/* ---------- KPI tiles ---------- */
+.kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:14px}
+.kpis2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px}
+.kpi{background:var(--card); border:1px solid var(--border); border-left:4px solid var(--accent);
+  border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow); min-width:0}
+.kpi .lbl{font-size:11px; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); font-weight:700}
+.kpi .val{font-size:26px; font-weight:800; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.kpi .val.md{font-size:17px}
+.kpi.good{border-left-color:var(--good)} .kpi.bad{border-left-color:var(--bad)} .kpi.warn{border-left-color:var(--warn)}
+
+/* ---------- filter bar ---------- */
+.filterbar{
+  display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center;
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow);
+}
+.filterbar label{font-size:12px; color:var(--text2); font-weight:600; display:flex; align-items:center; gap:6px}
+.filterbar .spacer{margin-left:auto}
+select,input[type=date],input[type=text],input[type=email],input[type=url],input[type=number],textarea{
+  background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:7px 10px; outline:none;
+}
+select:focus,input:focus,textarea:focus{border-color:var(--accent)}
+input.search{min-width:230px}
+
+/* ---------- charts ---------- */
+.charts2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px}
+.hbar-row{display:grid; grid-template-columns:minmax(120px,220px) 1fr; gap:10px; align-items:center; padding:5px 0}
+.hbar-row .hl{font-size:12px; font-weight:600; color:var(--text2); text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.hbar-track{display:flex; align-items:center; gap:8px; min-width:0}
+.hbar{height:16px; border-radius:4px; min-width:3px; transition:width .3s}
+.hbar-val{font-size:12px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums}
+.hbar-val small{color:var(--muted); font-weight:600}
+.donut-wrap{display:flex; align-items:center; justify-content:center; gap:26px; flex-wrap:wrap; padding:8px 0}
+.legend{font-size:12.5px}
+.legend div{display:flex; align-items:center; gap:8px; margin:5px 0}
+.legend .sw{width:12px;height:12px;border-radius:3px}
+.empty{color:var(--muted); text-align:center; padding:26px 10px; font-size:13px}
+
+/* ---------- tables ---------- */
+.tablecard{padding:0; overflow:hidden}
+.tablecard .thead{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 18px; flex-wrap:wrap}
+.tablecard .thead h3{margin:0}
+.tbl-scroll{overflow:auto; max-height:520px}
+table{width:100%; border-collapse:collapse; font-size:12.5px}
+th{position:sticky; top:0; background:var(--card2); color:var(--muted); text-align:left;
+  font-size:10.5px; letter-spacing:.8px; text-transform:uppercase; padding:10px 12px; z-index:2; white-space:nowrap}
+td{padding:10px 12px; border-top:1px solid var(--border); vertical-align:top}
+tbody tr:hover{background:rgba(255,255,255,.03)}
+html[data-theme="light"] tbody tr:hover{background:rgba(20,50,100,.04)}
+td .sub{font-size:11px; color:var(--muted); margin-top:2px}
+td .mono{font-variant-numeric:tabular-nums}
+.aid{font-weight:700; white-space:nowrap}
+.rowacts{display:flex; gap:5px; white-space:nowrap}
+.iconbtn{border:1px solid var(--border); background:var(--card2); border-radius:7px; width:28px; height:26px;
+  display:inline-flex; align-items:center; justify-content:center; font-size:12px; color:var(--text2)}
+.iconbtn:hover{border-color:var(--accent); color:var(--text)}
+.iconbtn.del:hover{border-color:var(--bad); color:var(--bad)}
+
+/* ---------- form ---------- */
+.formgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px 18px}
+.field{display:flex; flex-direction:column; gap:6px; min-width:0}
+.field.full{grid-column:1/-1}
+.field label{font-size:12px; font-weight:600; color:var(--text2)}
+.field label .req{color:var(--bad)}
+.field input,.field select,.field textarea{width:100%}
+.field input[readonly]{background:var(--card); color:var(--muted); border-style:dashed}
+.field textarea{min-height:110px; resize:vertical}
+.fieldnote{font-size:11px; color:var(--muted)}
+.formactions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid var(--border)}
+.editbanner{display:none; background:var(--warn-bg); border:1px solid var(--warn); color:var(--warn);
+  padding:9px 14px; border-radius:9px; margin-bottom:14px; font-weight:600; font-size:13px;
+  align-items:center; justify-content:space-between; gap:10px}
+.editbanner.show{display:flex}
+
+/* autocomplete */
+.ac-wrap{position:relative}
+.ac-list{position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--card2);
+  border:1px solid var(--accent); border-radius:10px; max-height:260px; overflow-y:auto; z-index:30; box-shadow:var(--shadow)}
+.ac-item{padding:9px 13px; cursor:pointer; border-bottom:1px solid var(--border)}
+.ac-item:last-child{border-bottom:0}
+.ac-item:hover,.ac-item.hot{background:var(--accent2); color:#fff}
+.ac-item .l1{font-weight:700; font-size:13px}
+.ac-item .l2{font-size:11px; color:var(--muted); margin-top:2px}
+.ac-item:hover .l2,.ac-item.hot .l2{color:#cfe0f5}
+
+/* ---------- admin ---------- */
+.admin-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start}
+.admin-grid .card h3{border-bottom:1px solid var(--border); padding-bottom:10px}
+.kv{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; font-size:13px}
+.kv label{color:var(--text2)}
+.taglist{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.tag{background:var(--card2); border:1px solid var(--border); padding:4px 10px; border-radius:99px; font-size:12px; display:inline-flex; gap:7px; align-items:center}
+.tag button{background:none;border:0;color:var(--bad);font-weight:700}
+textarea.list{min-height:150px; width:100%; font-size:12.5px}
+
+/* ---------- modal / toast / tooltip / login ---------- */
+.overlay{position:fixed; inset:0; background:rgba(5,10,20,.65); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; backdrop-filter:blur(2px)}
+.overlay.show{display:flex}
+.modal{background:var(--card); border:1px solid var(--border); border-radius:14px; width:min(680px,100%);
+  max-height:88vh; overflow-y:auto; box-shadow:var(--shadow)}
+.modal .mhead{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--card); z-index:2}
+.modal .mhead h3{font-size:15px}
+.modal .mbody{padding:18px 20px}
+.modal .mfoot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border)}
+.dgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; font-size:13px}
+.dgrid .di b{display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:2px}
+.dgrid .di.full{grid-column:1/-1}
+#toasts{position:fixed; right:18px; bottom:18px; z-index:200; display:flex; flex-direction:column; gap:8px}
+.toast{background:var(--card); border:1px solid var(--border); border-left:4px solid var(--accent);
+  border-radius:10px; padding:11px 16px; font-size:13px; font-weight:600; box-shadow:var(--shadow); max-width:380px; animation:tin .2s ease}
+.toast.good{border-left-color:var(--good)} .toast.bad{border-left-color:var(--bad)} .toast.warn{border-left-color:var(--warn)}
+@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+#tip{position:fixed; pointer-events:none; z-index:300; background:var(--card2); border:1px solid var(--border);
+  border-radius:8px; padding:7px 11px; font-size:12px; box-shadow:var(--shadow); display:none; max-width:280px}
+#tip b{font-variant-numeric:tabular-nums}
+#login{position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; align-items:center; justify-content:center}
+#login .box{width:min(400px,92vw); background:var(--card); border:1px solid var(--border); border-radius:16px; padding:30px; box-shadow:var(--shadow)}
+#login h1{font-size:19px; margin-bottom:4px}
+#login p{font-size:12.5px; color:var(--muted); margin-bottom:18px}
+#login .field{margin-bottom:12px}
+#login .err{color:var(--bad); font-size:12.5px; margin-top:10px; display:none}
+
+@media (max-width:1100px){
+  .kpis{grid-template-columns:1fr 1fr} .charts2{grid-template-columns:1fr}
+  .formgrid{grid-template-columns:1fr} .admin-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ======================= LOGIN ======================= -->
+<div id="login">
+  <div class="box">
+    <h1>🛡️ HP Mainstream EQMS</h1>
+    <p>Enterprise Quality Management · Sign in to continue</p>
+    <div class="field"><label>Full Name</label><input id="loginName" type="text" placeholder="e.g. Juan Dela Cruz" autocomplete="name"></div>
+    <div class="field"><label>Concentrix Email</label><input id="loginEmail" type="email" placeholder="name@concentrix.com" autocomplete="email"></div>
+    <button class="btn primary" style="width:100%;justify-content:center;margin-top:8px" onclick="App.signIn()">Sign In</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ======================= APP ======================= -->
+<div id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">
+      <h1><span class="logo">🛡️</span> <span id="brandTitle">HP Mainstream EQMS</span></h1>
+      <p>Enterprise Quality Management</p>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="exec"><span class="ic">▦</span> Executive Dashboard</button>
+      <button class="nav-item" data-view="qc"><span class="ic">⚡</span> Quick Case Dashboard</button>
+      <button class="nav-item" data-view="form"><span class="ic">＋</span> Resolution Code Audit</button>
+      <button class="nav-item" data-view="history"><span class="ic">≣</span> Audit History</button>
+      <button class="nav-item" data-view="analytics"><span class="ic">🗠</span> Analytics &amp; Export</button>
+      <button class="nav-item" data-view="admin" id="navAdmin" style="display:none"><span class="ic">⚙</span> Admin Center</button>
+    </nav>
+    <div class="userbox">
+      <div class="uname" id="uName">—</div>
+      <div class="urole" id="uRole">Auditor</div>
+      <div class="row">
+        <button class="btn sm" onclick="App.toggleTheme()">◐ Theme</button>
+        <button class="btn sm primary" onclick="App.signOut()">Sign Out</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h2 id="viewTitle">Executive Dashboard</h2>
+      <div class="right" id="topActions"></div>
+    </div>
+    <div class="content" id="content">
+
+      <!-- ============ EXECUTIVE DASHBOARD ============ -->
+      <section class="view active" id="view-exec">
+        <div class="filterbar" id="execFilters"></div>
+        <div class="kpis" id="execKpis"></div>
+        <div class="kpis2" id="execKpis2"></div>
+        <div class="charts2">
+          <div class="card"><h3>📈 Audit Trend (Last 14 Days)<span class="cap" id="execTrendCap"></span></h3><div id="execTrend"></div></div>
+          <div class="card"><h3>🎯 Valid vs. Invalid Breakdown</h3><div id="execDonut"></div></div>
+        </div>
+        <div class="charts2">
+          <div class="card"><h3>⚠️ Top Defective Case Resolution Codes</h3><div id="execTopCodes"></div></div>
+          <div class="card"><h3>🏆 Performance by Team Leader (Top 5)</h3><div id="execTopTL"></div></div>
+        </div>
+        <div class="card tablecard">
+          <div class="thead"><h3>🗄️ Live Audit Database</h3>
+            <input class="search" type="text" id="execSearch" placeholder="🔍 Search ID, agent, case #, remarks…"></div>
+          <div class="tbl-scroll" id="execTable"></div>
+        </div>
+      </section>
+
+      <!-- ============ QUICK CASE DASHBOARD ============ -->
+      <section class="view" id="view-qc">
+        <div class="filterbar" id="qcFilters"></div>
+        <div class="kpis" id="qcKpis"></div>
+        <div class="charts2">
+          <div class="card"><h3>📈 Quick Case Trend (Last 14 Days)<span class="cap" id="qcTrendCap"></span></h3><div id="qcTrend"></div></div>
+          <div class="card"><h3>🎯 Quick Case Valid vs. Invalid</h3><div id="qcDonut"></div></div>
+        </div>
+        <div class="charts2">
+          <div class="card"><h3>👤 Agents with Most Quick Case Defects</h3><div id="qcTopAgents"></div></div>
+          <div class="card"><h3>🏆 Quick Case Performance by Team Leader</h3><div id="qcTopTL"></div></div>
+        </div>
+        <div class="card tablecard">
+          <div class="thead"><h3>🗄️ Live Quick Case Database</h3>
+            <input class="search" type="text" id="qcSearch" placeholder="🔍 Search ID, agent, case #, remarks…"></div>
+          <div class="tbl-scroll" id="qcTable"></div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIT FORM ============ -->
+      <section class="view" id="view-form">
+        <div class="editbanner" id="editBanner">
+          <span id="editBannerText"></span>
+          <button class="btn sm" onclick="App.cancelEdit()">Cancel Edit</button>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <span style="font-size:12.5px;color:var(--muted)">Fill out required fields (<span style="color:var(--bad)">*</span>) to evaluate an agent transaction. Submitting an <b>Invalid</b> audit prepares an automatic email notification.</span>
+            <button class="btn sm" onclick="App.quickAddAgent()">＋ Agent not listed? Add Quick</button>
+          </div>
+          <div class="formgrid">
+            <div class="field full ac-wrap">
+              <label>Agent Name / EID <span class="req">*</span></label>
+              <input type="text" id="fAgent" placeholder="Start typing agent name or employee ID…" autocomplete="off">
+              <span class="fieldnote" id="agentCount"></span>
+              <div class="ac-list" id="acList" style="display:none"></div>
+            </div>
+            <div class="field"><label>Team Leader</label><input type="text" id="fTL" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>LOB / Account</label><input type="text" id="fLOB" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>Operations Manager</label><input type="text" id="fOM" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>TL Email</label><input type="text" id="fTLEmail" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>OM Email</label><input type="text" id="fOMEmail" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>Audit Date <span class="req">*</span></label><input type="date" id="fDate"></div>
+            <div class="field"><label>Auditor Name <span class="req">*</span></label><input type="text" id="fAuditor" readonly></div>
+            <div class="field"><label>Case Number <span class="req">*</span></label><input type="text" id="fCase" placeholder="e.g. 5039981234"></div>
+            <div class="field"><label>Genesys Transaction ID / URL <span class="req">*</span></label><input type="text" id="fGenesys" placeholder="e.g. https://apps.mypurecloud.de/… or 00XXXXXX"></div>
+            <div class="field"><label>Validation Result / Case Resolution <span class="req">*</span></label><select id="fResolution"></select></div>
+            <div class="field"><label>Expected Resolution Code <span class="req">*</span></label><select id="fExpected"></select></div>
+            <div class="field full"><label>Audit Remarks &amp; Coaching Notes <span class="req">*</span></label>
+              <textarea id="fRemarks" placeholder="Provide detailed audit observations, timestamps, interaction summary, and coaching recommendations…"></textarea></div>
+          </div>
+          <div class="formactions">
+            <button class="btn" onclick="App.clearForm()">Clear Form</button>
+            <button class="btn primary" id="submitBtn" onclick="App.submitAudit()">✔ Submit Quality Audit</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ AUDIT HISTORY ============ -->
+      <section class="view" id="view-history">
+        <div class="filterbar" id="histFilters"></div>
+        <div class="card tablecard">
+          <div class="thead"><h3>🗄️ Audit History &amp; Database</h3><span class="cap" id="histCount" style="font-size:12px;color:var(--muted)"></span></div>
+          <div class="tbl-scroll" id="histTable" style="max-height:calc(100vh - 260px)"></div>
+        </div>
+      </section>
+
+      <!-- ============ ANALYTICS ============ -->
+      <section class="view" id="view-analytics">
+        <div class="filterbar" id="anaFilters"></div>
+        <div class="grid" style="grid-template-columns:1fr; gap:14px">
+          <div class="card">
+            <h3>📤 Export Data (Excel-ready CSV)</h3>
+            <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">UTF-8 (BOM) CSV files formatted for Microsoft Excel and Power BI. Exports respect the timeframe filter above.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn primary" onclick="App.exportCsv('all')">📄 Export All Audits</button>
+              <button class="btn" onclick="App.exportCsv('invalid')">⚠️ Export Invalid Only</button>
+              <button class="btn" onclick="App.exportCsv('qc')">⚡ Export Quick Case Only</button>
+              <button class="btn" onclick="App.exportMasterlist()">👥 Export Agent Masterlist</button>
+              <button class="btn" onclick="App.exportBackup()">💾 Full JSON Backup</button>
+            </div>
+          </div>
+          <div class="charts2" style="margin:0">
+            <div class="card"><h3>🧑‍💼 Auditor Scorecard</h3><div id="anaAuditors"></div></div>
+            <div class="card"><h3>👥 Team Leader Scorecard</h3><div id="anaTLs"></div></div>
+          </div>
+          <div class="card"><h3>🏷️ Expected Resolution Code Distribution</h3><div id="anaCodes"></div></div>
+        </div>
+      </section>
+
+      <!-- ============ ADMIN ============ -->
+      <section class="view" id="view-admin">
+        <div class="admin-grid" id="adminGrid"></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<div id="tip"></div>
+
+<!-- generic modal -->
+<div class="overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="mhead"><h3 id="modalTitle"></h3><button class="iconbtn" onclick="App.closeModal()">✕</button></div>
+    <div class="mbody" id="modalBody"></div>
+    <div class="mfoot" id="modalFoot"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================================================================
+   HP Mainstream EQMS — single-file web edition
+   Storage: localStorage (device) + optional shared team database
+   file (JSON) on a OneDrive/SharePoint-synced folder for live
+   multi-auditor sync via the File System Access API.
+   ================================================================ */
+
+const App = (() => {
+
+/* ---------------- constants & defaults ---------------- */
+const VER = '7.0.0';
+const LS = { audits:'eqms7.audits', master:'eqms7.master', settings:'eqms7.settings',
+             session:'eqms7.session', tombs:'eqms7.tombs', log:'eqms7.log', theme:'eqms7.theme' };
+
+const DEFAULT_INVALID_RES = [
+  'Remote Solution (Invalid)',
+  'Onsite Solution (Invalid)',
+  'Parts Shipped (Invalid)',
+  'Exchange Solution (Invalid)',
+  'Offsite Solution (Invalid)',
+  'Non-Tech Solution (Invalid)',
+  'Quick Case (Invalid)',
+  'Referred – for Hardware Service (Invalid)',
+  'Referred – for Software Support (Invalid)',
+  'Unresolved – Not Entitled for Support (Invalid)',
+];
+const DEFAULT_EXPECTED = [
+  'Remote Solution (HW/SW Resolved Remotely via Troubleshooting)',
+  'Onsite Solution (Break & Fix / Onsite Repair)',
+  'Parts Shipped (CSR Part / RC Whole Unit)',
+  'Exchange Solution (Whole Unit Exchange)',
+  'Offsite Solution (Repair Center / Bench Repair)',
+  'Non-Tech Solution (Non-Technical / Admin Case)',
+  'Quick Case',
+  'Referred – for Hardware Service',
+  'Referred – for Software Support',
+  'Unresolved – Not Entitled for Support',
+];
+const DEFAULT_USERS = [
+  'ivy.serata@concentrix.com','jonel.meniano1@concentrix.com','archieval.decena@concentrix.com',
+  'donnah.brual@concentrix.com','emil.eduardo@concentrix.com','maevenus.setias@concentrix.com',
+  'kurtjohn.gatmaitan@concentrix.com','attinareccie.padaya@concentrix.com','christian.pila@concentrix.com',
+  'shaileen.almodiel@concentrix.com','darlene.presado@concentrix.com','anita.fabales@concentrix.com',
+  'jessalyn.sastrillo@concentrix.com','caroline.chan@concentrix.com',
+];
+const defaultSettings = () => ({
+  updatedAt: '2000-01-01T00:00:00.000Z',
+  appTitle: 'HP Mainstream EQMS',
+  orgName: 'Concentrix HP Mainstream',
+  adminEmail: 'sundeep.bhardwaj@concentrix.com',
+  restrictLogin: false,
+  authorizedUsers: DEFAULT_USERS.slice(),
+  invalidResolutions: DEFAULT_INVALID_RES.slice(),
+  expectedCodes: DEFAULT_EXPECTED.slice(),
+  emailEnabled: true,
+  emailCc: '',
+  emailSubject: '[EQMS] Invalid Audit {audit_id} - {agent} - Case {case}',
+  cdaxUrl: '', inkUrl: '',
+  passTarget: 90,
+});
+
+/* ---------------- tiny utils ---------------- */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nowIso = () => new Date().toISOString();
+const todayIso = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const load = (k, fb) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ toast('Local storage full or blocked: '+e.message,'bad'); } };
+const debounce = (fn, ms) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
+const pct = (n, d) => d ? (100*n/d) : 0;
+const fmtPct = v => (Math.round(v*10)/10).toFixed(1) + '%';
+const cmp = (a,b) => a<b?-1:a>b?1:0;
+
+function fmtDateTime(iso){
+  if(!iso) return '—';
+  const d = new Date(iso); if(isNaN(d)) return iso;
+  return d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+function toast(msg, kind){
+  const t = document.createElement('div');
+  t.className = 'toast ' + (kind||'');
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),350); }, 4200);
+}
+function download(name, text, mime){
+  const blob = new Blob([text], {type: mime||'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function csvCell(v){ v = String(v ?? ''); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }
+function toCsv(rows){ return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n'); }
+
+/* ---------------- state ---------------- */
+let settings = Object.assign(defaultSettings(), load(LS.settings, {}));
+let audits   = load(LS.audits, []);
+let master   = Object.assign({updatedAt:'', agents:[]}, load(LS.master, {}));
+let tombs    = load(LS.tombs, []);
+let session  = load(LS.session, null);
+let logbook  = load(LS.log, []);
+let selectedAgent = null;
+let editingId = null;
+let dirty = false;           // unsynced local changes
+let currentView = 'exec';
+
+const filters = {
+  exec: { time:'all', tl:'all', auditor:'all', validation:'all' },
+  qc:   { time:'all', tl:'all', auditor:'all', validation:'all' },
+  hist: { time:'all', tl:'all', auditor:'all', validation:'all', search:'' },
+  ana:  { time:'all' },
+};
+
+/* ---------------- auth ---------------- */
+const isAdmin = () => !!session && session.email.toLowerCase() === settings.adminEmail.toLowerCase();
+function logAction(action, details){
+  logbook.unshift({ ts: nowIso(), user: session ? session.email : 'system', action, details: details||'' });
+  if (logbook.length > 500) logbook.length = 500;
+  save(LS.log, logbook);
+}
+function signIn(){
+  const name = $('#loginName').value.trim();
+  const email = $('#loginEmail').value.trim().toLowerCase();
+  const err = $('#loginErr');
+  err.style.display = 'none';
+  if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    err.textContent = 'Please enter your full name and a valid email address.';
+    err.style.display = 'block'; return;
+  }
+  if (settings.restrictLogin && email !== settings.adminEmail.toLowerCase()
+      && !settings.authorizedUsers.some(u => u.toLowerCase() === email)) {
+    err.textContent = 'This email is not on the authorized auditor list. Contact the administrator.';
+    err.style.display = 'block'; return;
+  }
+  session = { name, email };
+  save(LS.session, session);
+  logAction('LOGIN', name + ' <' + email + '>');
+  boot();
+}
+function signOut(){
+  logAction('LOGOUT','');
+  session = null; localStorage.removeItem(LS.session);
+  location.reload();
+}
+
+/* ---------------- audit helpers ---------------- */
+const isValidRes = res => /^valid/i.test(String(res||'').trim());
+const isQuickCase = a => /quick\s*case/i.test((a.caseResolution||'') + ' ' + (a.expectedCode||''));
+function nextAuditId(){
+  let maxSeq = 0;
+  for (const a of audits.concat(tombs)) {
+    const m = /^AUD-\d{4}-(\d+)$/.exec(a.id || a.audit_id || '');
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1],10));
+  }
+  return 'AUD-' + new Date().getFullYear() + '-' + String(maxSeq+1).padStart(6,'0');
+}
+function findAudit(id){ return audits.find(a => a.id === id); }
+const canModify = a => isAdmin() || (session && a.auditorEmail && a.auditorEmail.toLowerCase() === session.email.toLowerCase());
+
+function inTimeframe(a, tf){
+  if (tf === 'all') return true;
+  const d = a.date || (a.createdAt||'').slice(0,10);
+  if (!d) return false;
+  const today = todayIso();
+  const days = n => { const t=new Date(); t.setDate(t.getDate()-n);
+    return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
+  switch (tf) {
+    case 'today': return d === today;
+    case '7d':  return d >= days(6);
+    case '14d': return d >= days(13);
+    case '30d': return d >= days(29);
+    case '90d': return d >= days(89);
+    case 'month': return d.slice(0,7) === today.slice(0,7);
+    case 'lastmonth': { const t=new Date(); t.setDate(1); t.setMonth(t.getMonth()-1);
+      return d.slice(0,7) === t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0'); }
+    default: return true;
+  }
+}
+function applyFilters(list, f){
+  return list.filter(a =>
+    inTimeframe(a, f.time)
+    && (f.tl === 'all' || (a.teamLeader||'—') === f.tl)
+    && (f.auditor === 'all' || (a.auditorName||'—') === f.auditor)
+    && (f.validation === 'all' || a.validation === f.validation));
+}
+function searchFilter(list, q){
+  q = (q||'').trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(a =>
+    [a.id, a.agentName, a.agentEid, a.caseNumber, a.genesysId, a.remarks,
+     a.auditorName, a.teamLeader, a.caseResolution, a.expectedCode]
+    .some(v => String(v||'').toLowerCase().includes(q)));
+}
+const sortAudits = list => list.slice().sort((a,b) => cmp(b.createdAt||'', a.createdAt||''));
+
+/* ================================================================
+   TEAM SYNC — shared JSON database file (File System Access API)
+   Put EQMS_TeamDB.json in a SharePoint/OneDrive folder synced to
+   every auditor's PC. Everyone connects once; the app then merges
+   automatically every 10 s and after each submission.
+   ================================================================ */
+let syncHandle = null, syncTimer = null, syncBusy = false, lastSync = null, syncError = '';
+const fsaSupported = () => 'showOpenFilePicker' in window;
+
+const idb = {
+  open: () => new Promise((res, rej) => {
+    const r = indexedDB.open('eqms7-sync', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }),
+  set: async (k, v) => { const db = await idb.open(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); },
+  get: async k => { const db = await idb.open(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const rq=tx.objectStore('kv').get(k); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); },
+  del: async k => { const db = await idb.open(); return new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); },
+};
+
+async function connectSync(create){
+  if (!fsaSupported()) { toast('This browser cannot connect a live team file. Use Chrome/Edge, or use manual Export/Import in Admin Center.','warn'); return; }
+  try {
+    if (create) {
+      syncHandle = await window.showSaveFilePicker({ suggestedName:'EQMS_TeamDB.json',
+        types:[{description:'EQMS Team Database', accept:{'application/json':['.json']}}] });
+    } else {
+      [syncHandle] = await window.showOpenFilePicker({ types:[{description:'EQMS Team Database', accept:{'application/json':['.json']}}] });
+    }
+    await idb.set('handle', syncHandle);
+    dirty = true;
+    await syncNow();
+    startSyncTimer();
+    logAction('SYNC_CONNECT', syncHandle.name);
+    toast('Team database connected: ' + syncHandle.name, 'good');
+  } catch(e) { if (e && e.name !== 'AbortError') toast('Could not connect: ' + e.message, 'bad'); }
+  renderSyncPill(); if (currentView==='admin') renderAdmin();
+}
+async function disconnectSync(){
+  syncHandle = null; await idb.del('handle');
+  if (syncTimer) clearInterval(syncTimer), syncTimer = null;
+  logAction('SYNC_DISCONNECT','');
+  renderSyncPill(); if (currentView==='admin') renderAdmin();
+  toast('Team sync disconnected. Data stays on this device.','warn');
+}
+async function restoreSyncHandle(){
+  if (!fsaSupported()) return;
+  try {
+    const h = await idb.get('handle');
+    if (!h) return;
+    syncHandle = h;
+    const perm = await h.queryPermission({mode:'readwrite'});
+    if (perm === 'granted') { await syncNow(); startSyncTimer(); }
+    else syncError = 'perm';           // needs a user gesture to re-grant
+  } catch(e) { syncError = e.message; }
+  renderSyncPill();
+}
+async function reauthorizeSync(){
+  if (!syncHandle) return;
+  try {
+    const perm = await syncHandle.requestPermission({mode:'readwrite'});
+    if (perm === 'granted') { syncError=''; await syncNow(); startSyncTimer(); toast('Team sync re-connected.','good'); }
+  } catch(e) { toast('Re-authorize failed: '+e.message,'bad'); }
+  renderSyncPill();
+}
+function startSyncTimer(){ if (syncTimer) clearInterval(syncTimer); syncTimer = setInterval(()=>syncNow(), 10000); }
+
+function mergeRemote(remote){
+  let changedLocal = false, changedRemote = false;
+  remote = remote && typeof remote === 'object' ? remote : {};
+  remote.audits = Array.isArray(remote.audits) ? remote.audits : [];
+  remote.tombstones = Array.isArray(remote.tombstones) ? remote.tombstones : [];
+
+  // --- tombstones: union by id, newest wins ---
+  const tMap = new Map();
+  for (const t of tombs.concat(remote.tombstones)) {
+    const p = tMap.get(t.id);
+    if (!p || (t.at||'') > (p.at||'')) tMap.set(t.id, t);
+  }
+  const mTombs = Array.from(tMap.values());
+  if (mTombs.length !== tombs.length) changedLocal = true;
+  if (mTombs.length !== remote.tombstones.length) changedRemote = true;
+
+  // --- audits: by id, newest updatedAt wins; tombstone kills unless edited after deletion ---
+  const aMap = new Map();
+  for (const a of remote.audits) aMap.set(a.id, a);
+  for (const a of audits) {
+    const r = aMap.get(a.id);
+    if (!r) { aMap.set(a.id, a); changedRemote = true; }
+    else if ((a.updatedAt||'') > (r.updatedAt||'')) { aMap.set(a.id, a); changedRemote = true; }
+    else if ((r.updatedAt||'') > (a.updatedAt||'')) changedLocal = true;
+  }
+  for (const a of remote.audits) if (!audits.some(x => x.id === a.id)) changedLocal = true;
+  let mAudits = Array.from(aMap.values()).filter(a => {
+    const t = tMap.get(a.id);
+    return !t || (a.updatedAt||'') > (t.at||'');
+  });
+
+  // --- masterlist & settings: newest updatedAt wins wholesale ---
+  let mMaster = master, mSettings = settings;
+  if (remote.master && (remote.master.updatedAt||'') > (master.updatedAt||'')) { mMaster = remote.master; changedLocal = true; }
+  else if ((master.updatedAt||'') > ((remote.master||{}).updatedAt||'')) changedRemote = true;
+  if (remote.settings && (remote.settings.updatedAt||'') > (settings.updatedAt||'')) {
+    mSettings = Object.assign(defaultSettings(), remote.settings); changedLocal = true;
+  } else if ((settings.updatedAt||'') > ((remote.settings||{}).updatedAt||'')) changedRemote = true;
+
+  audits = sortAudits(mAudits); tombs = mTombs; master = mMaster; settings = mSettings;
+  if (changedLocal) { save(LS.audits,audits); save(LS.tombs,tombs); save(LS.master,master); save(LS.settings,settings); }
+  return { changedLocal, changedRemote };
+}
+
+async function syncNow(showToast){
+  if (!syncHandle || syncBusy) return;
+  syncBusy = true;
+  try {
+    const perm = await syncHandle.queryPermission({mode:'readwrite'});
+    if (perm !== 'granted') { syncError='perm'; renderSyncPill(); syncBusy=false; return; }
+    let remote = {};
+    try {
+      const file = await syncHandle.getFile();
+      const text = await file.text();
+      if (text.trim()) remote = JSON.parse(text);
+    } catch(e) { /* new/empty file */ }
+    const { changedLocal, changedRemote } = mergeRemote(remote);
+    if (changedRemote || dirty) {
+      const w = await syncHandle.createWritable();
+      await w.write(JSON.stringify({ version:VER, updatedAt:nowIso(),
+        audits, tombstones:tombs, master, settings }, null, 1));
+      await w.close();
+      dirty = false;
+    }
+    lastSync = new Date(); syncError = '';
+    if (changedLocal) { render(); if (showToast) toast('New team data received.','good'); }
+    else if (showToast) toast('Team database is up to date.','good');
+  } catch(e) {
+    syncError = e.message || 'sync failed';
+    if (showToast) toast('Sync failed: ' + syncError, 'bad');
+  }
+  syncBusy = false;
+  renderSyncPill();
+}
+function markDirty(){ dirty = true; if (syncHandle) debouncedSync(); }
+const debouncedSync = debounce(()=>syncNow(), 1500);
+
+function renderSyncPill(){
+  const el = $('#syncPill'); if (!el) return;
+  if (syncHandle && !syncError) {
+    el.className = 'pill on';
+    el.innerHTML = '<span class="dot"></span> Team Sync Active' + (lastSync ? ' <span style="color:var(--muted)">· ' + lastSync.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}) + '</span>' : '');
+    el.onclick = () => syncNow(true);
+    el.title = 'Shared file: ' + syncHandle.name + ' — click to sync now';
+  } else if (syncHandle && syncError === 'perm') {
+    el.className = 'pill warn';
+    el.innerHTML = '<span class="dot"></span> Click to re-connect Team Sync';
+    el.onclick = reauthorizeSync;
+  } else if (syncHandle) {
+    el.className = 'pill warn';
+    el.innerHTML = '<span class="dot"></span> Sync error — click to retry';
+    el.onclick = () => syncNow(true);
+    el.title = syncError;
+  } else {
+    el.className = 'pill';
+    el.innerHTML = '<span class="dot"></span> Local Only — connect team DB in Admin';
+    el.onclick = () => isAdmin() ? showView('admin') : toast('Ask the administrator to share the team database file, then connect it from Admin Center. Non-admins: use the ⚙ button here.','warn');
+    if (!isAdmin()) el.onclick = () => openSyncHelp();
+  }
+}
+function openSyncHelp(){
+  openModal('🔗 Connect the Team Database', `
+    <p style="font-size:13px;line-height:1.6">To see everyone's audits live, connect this app to the shared
+    <b>EQMS_TeamDB.json</b> file that your administrator placed in the team's SharePoint/OneDrive-synced folder.</p>
+    <ol style="font-size:13px;line-height:1.8;margin:10px 0 0 18px">
+      <li>In File Explorer, make sure the team folder is synced (OneDrive icon ✔).</li>
+      <li>Click <b>Connect</b> below and pick <b>EQMS_TeamDB.json</b> from that folder.</li>
+      <li>Done — the app merges your audits with the team's every 10 seconds.</li>
+    </ol>`,
+    `<button class="btn" onclick="App.closeModal()">Close</button>
+     <button class="btn primary" onclick="App.closeModal();App.connectSync(false)">🔗 Connect existing file</button>`);
+}
+
+/* ================================================================
+   NAVIGATION & TOP BAR
+   ================================================================ */
+const VIEW_TITLES = { exec:'Executive Dashboard', qc:'Quick Case Dashboard', form:'Resolution Code Audit',
+                      history:'Audit History', analytics:'Analytics & Data Management', admin:'Admin Center & Configuration' };
+function showView(v){
+  if (v === 'admin' && !isAdmin()) { toast('Admin Center is restricted to the administrator.','bad'); return; }
+  currentView = v;
+  $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-'+v));
+  $('#viewTitle').textContent = VIEW_TITLES[v];
+  renderTopActions();
+  render();
+}
+function renderTopActions(){
+  const el = $('#topActions');
+  let html = '<span class="pill" id="syncPill"><span class="dot"></span>…</span>';
+  if (currentView === 'exec' || currentView === 'qc')
+    html += '<button class="btn primary sm" onclick="App.refresh()">⟳ Refresh Data</button>';
+  if (currentView === 'form') {
+    if (settings.cdaxUrl) html += `<a class="btn sm" style="text-decoration:none" href="${esc(settings.cdaxUrl)}" target="_blank" rel="noopener">📘 CDAX Guidelines</a>`;
+    if (settings.inkUrl)  html += `<a class="btn sm" style="text-decoration:none" href="${esc(settings.inkUrl)}" target="_blank" rel="noopener">🖨 Instant Ink Matrix</a>`;
+    html += `<span class="pill" style="color:var(--accent);border-color:var(--accent)">ID: ${esc(editingId || nextAuditId())}</span>`;
+  }
+  if (currentView === 'history')
+    html += '<button class="btn primary sm" onclick="App.refresh()">⟳ Refresh</button>'
+          + '<button class="btn sm" onclick="App.exportCsv(\'filtered\')">📥 Export Filtered CSV</button>';
+  el.innerHTML = html;
+  renderSyncPill();
+}
+function refresh(){ if (syncHandle) syncNow(true); render(); }
+
+/* ================================================================
+   FILTER BARS
+   ================================================================ */
+function tlOptions(){
+  const s = new Set(audits.map(a => a.teamLeader||'—'));
+  master.agents.forEach(a => a.teamLeader && s.add(a.teamLeader));
+  return Array.from(s).sort();
+}
+function auditorOptions(){
+  const s = new Set(audits.map(a => a.auditorName||'—'));
+  return Array.from(s).sort();
+}
+const TIME_OPTS = [['all','All Time'],['today','Today'],['7d','Last 7 Days'],['14d','Last 14 Days'],
+                   ['30d','Last 30 Days'],['90d','Last 90 Days'],['month','This Month'],['lastmonth','Last Month']];
+
+function filterBar(key, withSearch){
+  const f = filters[key];
+  const sel = (name, opts, val, label, icon) => `
+    <label>${icon} ${label}:
+      <select data-fkey="${key}" data-fname="${name}">
+        ${opts.map(([v,t]) => `<option value="${esc(v)}"${v===val?' selected':''}>${esc(t)}</option>`).join('')}
+      </select></label>`;
+  return (withSearch ? `<input class="search" type="text" data-fkey="${key}" data-fname="search" value="${esc(f.search||'')}" placeholder="🔍 Search ID, agent, case #, notes…">` : '')
+    + sel('time', TIME_OPTS, f.time, 'Timeframe', '📅')
+    + sel('tl', [['all','All Team Leaders'], ...tlOptions().map(t=>[t,t])], f.tl, 'Team Leader', '👤')
+    + sel('auditor', [['all','All Auditors'], ...auditorOptions().map(t=>[t,t])], f.auditor, 'Auditor', '🏷️')
+    + sel('validation', [['all','All Statuses'],['Valid','Valid'],['Invalid','Invalid']], f.validation, 'Validation', '✅')
+    + `<span class="spacer"></span><button class="btn sm" data-freset="${key}">Reset Filters</button>`;
+}
+function bindFilterBar(container){
+  container.querySelectorAll('select,[data-fname="search"]').forEach(el => {
+    const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(ev, () => { filters[el.dataset.fkey][el.dataset.fname] = el.value; render(); });
+  });
+  container.querySelectorAll('[data-freset]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.freset;
+    filters[k] = Object.assign({}, filters[k], {time:'all', tl:'all', auditor:'all', validation:'all', search:''});
+    render();
+  }));
+}
+
+/* ================================================================
+   CHARTS (hand-rolled SVG/HTML, shared tooltip)
+   ================================================================ */
+const tip = { el: null,
+  show(html, x, y){ this.el.innerHTML = html; this.el.style.display='block';
+    const r = this.el.getBoundingClientRect();
+    this.el.style.left = Math.min(x+14, innerWidth - r.width - 12) + 'px';
+    this.el.style.top  = Math.max(8, Math.min(y+14, innerHeight - r.height - 12)) + 'px'; },
+  hide(){ this.el.style.display='none'; } };
+
+function trendChart(container, list, capEl){
+  const days = [];
+  for (let i=13; i>=0; i--){ const d=new Date(); d.setDate(d.getDate()-i);
+    const iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    days.push({ iso, label: iso.slice(5), count: 0 }); }
+  const byDate = {};
+  list.forEach(a => { const d = a.date || (a.createdAt||'').slice(0,10); byDate[d] = (byDate[d]||0)+1; });
+  days.forEach(d => d.count = byDate[d.iso]||0);
+  const inWindow = days.reduce((s,d)=>s+d.count,0);
+  if (capEl) capEl.textContent = `(${list.length} in timeframe · ${inWindow} in window)`;
+
+  const W=620, H=210, P={l:34,r:14,t:12,b:26};
+  const maxV = Math.max(2, ...days.map(d=>d.count));
+  const ticks = maxV <= 5 ? maxV : 5;
+  const xs = i => P.l + i*(W-P.l-P.r)/(days.length-1);
+  const ys = v => H-P.b - v*(H-P.t-P.b)/maxV;
+  let grid='', xlab='';
+  for (let t=0; t<=ticks; t++){
+    const v = Math.round(t*maxV/ticks), y = ys(v);
+    grid += `<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>
+             <text x="${P.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)">${v}</text>`;
+  }
+  days.forEach((d,i)=>{ if (i%2===0) xlab += `<text x="${xs(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.label}</text>`; });
+  const pts = days.map((d,i)=>[xs(i), ys(d.count)]);
+  const line = pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  const area = line + ` L ${pts[pts.length-1][0]} ${H-P.b} L ${pts[0][0]} ${H-P.b} Z`;
+  const dots = pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="${days[i].count?4:3}" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`).join('');
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" id="tsvg-${container.id}">
+      <defs><linearGradient id="ag-${container.id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--accent)" stop-opacity="0.35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0.02"/>
+      </linearGradient></defs>
+      ${grid}${xlab}
+      <path d="${area}" fill="url(#ag-${container.id})"/>
+      <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+      <line id="cross-${container.id}" y1="${P.t}" y2="${H-P.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>
+      <rect x="${P.l}" y="${P.t}" width="${W-P.l-P.r}" height="${H-P.t-P.b}" fill="transparent" data-hover="1"/>
+    </svg>`;
+  const svg = container.firstElementChild;
+  const cross = svg.querySelector('#cross-'+container.id);
+  svg.querySelector('[data-hover]').addEventListener('mousemove', e => {
+    const r = svg.getBoundingClientRect();
+    const fx = (e.clientX - r.left) * W / r.width;
+    let idx = 0, best = 1e9;
+    pts.forEach((p,i)=>{ const d = Math.abs(p[0]-fx); if (d<best){best=d;idx=i;} });
+    cross.style.display='block'; cross.setAttribute('x1', pts[idx][0]); cross.setAttribute('x2', pts[idx][0]);
+    tip.show(`<b>${days[idx].iso}</b><br>${days[idx].count} audit${days[idx].count===1?'':'s'}`, e.clientX, e.clientY);
+  });
+  svg.addEventListener('mouseleave', ()=>{ cross.style.display='none'; tip.hide(); });
+}
+
+function donutChart(container, valid, invalid){
+  const total = valid + invalid;
+  if (!total) { container.innerHTML = '<div class="empty">No audits in the selected filters yet.</div>'; return; }
+  const R=62, SW=22, C=2*Math.PI*R, gap = (valid && invalid) ? 3 : 0;
+  const vFrac = valid/total;
+  const vLen = Math.max(0, vFrac*C - gap), iLen = Math.max(0, (1-vFrac)*C - gap);
+  const seg = (len, off, color, label, count) => len <= 0 ? '' :
+    `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${color}" stroke-width="${SW}"
+      stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"
+      data-tip="${esc(label)}: ${count} (${fmtPct(pct(count,total))})" style="cursor:pointer"/>`;
+  const rate = fmtPct(pct(valid,total));
+  container.innerHTML = `<div class="donut-wrap">
+    <svg viewBox="0 0 180 180" width="180" height="180">
+      <circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--card2)" stroke-width="${SW}"/>
+      ${seg(vLen, 0, 'var(--good)', 'Valid', valid)}
+      ${seg(iLen, vFrac*C + (valid?gap:0) - (valid?0:0), 'var(--bad)', 'Invalid', invalid)}
+      <text x="90" y="86" text-anchor="middle" font-size="22" font-weight="800" fill="var(--text)">${rate}</text>
+      <text x="90" y="104" text-anchor="middle" font-size="9.5" letter-spacing="1" fill="var(--muted)">VALID RATE</text>
+    </svg>
+    <div class="legend">
+      <div><span class="sw" style="background:var(--good)"></span> <b>${valid}</b>&nbsp;Valid (${fmtPct(pct(valid,total))})</div>
+      <div><span class="sw" style="background:var(--bad)"></span> <b>${invalid}</b>&nbsp;Invalid (${fmtPct(pct(invalid,total))})</div>
+      <div style="color:var(--muted);margin-top:8px">Total Evaluated: ${total}</div>
+    </div></div>`;
+  container.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mousemove', e => tip.show(el.dataset.tip, e.clientX, e.clientY));
+    el.addEventListener('mouseleave', ()=>tip.hide());
+  });
+}
+
+function hBars(container, rows, opts){
+  // rows: [{label, value, extra, color, tip}]
+  opts = opts||{};
+  if (!rows.length) { container.innerHTML = '<div class="empty">'+(opts.empty||'No data for the selected filters.')+'</div>'; return; }
+  const max = Math.max(...rows.map(r=>r.value), 1);
+  container.innerHTML = rows.map(r => `
+    <div class="hbar-row" data-tip="${esc(r.tip||r.label+': '+r.value)}">
+      <div class="hl" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div class="hbar-track">
+        <div class="hbar" style="width:${Math.max(2, 100*r.value/max)}%;background:${r.color||'var(--accent)'}"></div>
+        <div class="hbar-val">${r.value} ${r.extra?`<small>(${esc(r.extra)})</small>`:''}</div>
+      </div>
+    </div>`).join('');
+  container.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mousemove', e => tip.show(el.dataset.tip, e.clientX, e.clientY));
+    el.addEventListener('mouseleave', ()=>tip.hide());
+  });
+}
+
+/* ================================================================
+   DASHBOARDS
+   ================================================================ */
+function kpi(label, val, cls, md){
+  return `<div class="kpi ${cls||''}"><div class="lbl">${label}</div><div class="val ${md?'md':''}" title="${esc(val)}">${esc(val)}</div></div>`;
+}
+function topDefective(list){
+  const m = {};
+  list.filter(a => a.validation==='Invalid').forEach(a => { const k=a.caseResolution||'(unspecified)'; m[k]=(m[k]||0)+1; });
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+}
+function tlPerf(list){
+  const m = {};
+  list.forEach(a => { const k=a.teamLeader||'Unassigned'; (m[k]=m[k]||{t:0,v:0}); m[k].t++; if (a.validation==='Valid') m[k].v++; });
+  return Object.entries(m).map(([k,s])=>({tl:k, total:s.t, valid:s.v, rate:pct(s.v,s.t)})).sort((a,b)=>b.total-a.total);
+}
+
+function renderExec(){
+  const fb = $('#execFilters'); fb.innerHTML = filterBar('exec'); bindFilterBar(fb);
+  const list = applyFilters(audits, filters.exec);
+  const valid = list.filter(a=>a.validation==='Valid').length;
+  const invalid = list.length - valid;
+  const defect = topDefective(list);
+  const last = sortAudits(list)[0];
+  $('#execKpis').innerHTML =
+    kpi('Filtered Audits', list.length) + kpi('Valid Audits', valid, 'good') +
+    kpi('Invalid Audits', invalid, 'bad') + kpi('Invalid Percentage', fmtPct(pct(invalid, list.length)), invalid?'bad':'good');
+  $('#execKpis2').innerHTML =
+    kpi('Top Defective Resolution Code', defect.length ? `${defect[0][0]} (${defect[0][1]}x)` : '—', 'bad', true) +
+    kpi('Last Audit Submission', last ? fmtDateTime(last.createdAt) : '—', '', true);
+  trendChart($('#execTrend'), list, $('#execTrendCap'));
+  donutChart($('#execDonut'), valid, invalid);
+  hBars($('#execTopCodes'), defect.slice(0,6).map(([k,v])=>({
+    label:k, value:v, extra:fmtPct(pct(v,invalid||1)), color:'var(--bad)',
+    tip:`${k} — ${v} invalid audit${v===1?'':'s'} (${fmtPct(pct(v,invalid||1))} of invalids)` })),
+    {empty:'No invalid audits — nothing defective to show. 🎉'});
+  hBars($('#execTopTL'), tlPerf(list).slice(0,5).map(r=>({
+    label:r.tl, value:r.total, extra:fmtPct(r.rate)+' pass',
+    color:r.rate >= settings.passTarget ? 'var(--good)' : 'var(--bad)',
+    tip:`${r.tl}: ${r.total} audits · ${r.valid} valid · ${fmtPct(r.rate)} pass rate` })));
+  renderAuditTable($('#execTable'), searchFilter(list, $('#execSearch').value));
+}
+
+function renderQC(){
+  const fb = $('#qcFilters'); fb.innerHTML = filterBar('qc'); bindFilterBar(fb);
+  const list = applyFilters(audits.filter(isQuickCase), filters.qc);
+  const valid = list.filter(a=>a.validation==='Valid').length;
+  const invalid = list.length - valid;
+  $('#qcKpis').innerHTML =
+    kpi('Quick Case Audits', list.length, 'warn') + kpi('Valid Quick Cases', valid, 'good') +
+    kpi('Invalid Quick Cases', invalid, 'bad') + kpi('Invalid Percentage', fmtPct(pct(invalid, list.length)), invalid?'bad':'good');
+  trendChart($('#qcTrend'), list, $('#qcTrendCap'));
+  donutChart($('#qcDonut'), valid, invalid);
+  const agentDefects = {};
+  list.filter(a=>a.validation==='Invalid').forEach(a => { const k = a.agentName||'—'; agentDefects[k]=(agentDefects[k]||0)+1; });
+  hBars($('#qcTopAgents'), Object.entries(agentDefects).sort((a,b)=>b[1]-a[1]).slice(0,6)
+    .map(([k,v])=>({label:k, value:v, color:'var(--bad)', tip:`${k}: ${v} invalid quick case${v===1?'':'s'}`})),
+    {empty:'No invalid quick cases in the selected filters.'});
+  hBars($('#qcTopTL'), tlPerf(list).slice(0,5).map(r=>({
+    label:r.tl, value:r.total, extra:fmtPct(r.rate)+' pass',
+    color:r.rate >= settings.passTarget ? 'var(--good)' : 'var(--bad)',
+    tip:`${r.tl}: ${r.total} quick case audits · ${fmtPct(r.rate)} pass rate` })));
+  renderAuditTable($('#qcTable'), searchFilter(list, $('#qcSearch').value));
+}
+
+/* ================================================================
+   AUDIT TABLES
+   ================================================================ */
+function auditRow(a){
+  const inv = a.validation === 'Invalid';
+  return `<tr>
+    <td class="aid">${esc(a.id)}${isQuickCase(a)?' <span class="badge qc" style="padding:1px 7px">QC</span>':''}</td>
+    <td class="mono" style="white-space:nowrap">${esc(a.date||'—')}</td>
+    <td><div style="font-weight:600">${esc(a.agentName||'—')}</div><div class="sub">EID: ${esc(a.agentEid||'—')}</div></td>
+    <td>${esc(a.teamLeader||'—')}</td>
+    <td class="mono">${esc(a.caseNumber||'—')}</td>
+    <td><span class="badge ${inv?'invalid':'valid'}">${esc(a.validation)}</span>
+        ${inv?`<div class="sub">${esc(a.caseResolution)}</div>`:''}</td>
+    <td style="max-width:210px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.expectedCode)}">${esc(a.expectedCode||'—')}</div></td>
+    <td>${esc(a.auditorName||'—')}</td>
+    <td><div class="rowacts">
+      <button class="iconbtn" title="View details" data-act="view" data-id="${esc(a.id)}">👁</button>
+      <button class="iconbtn" title="Copy summary" data-act="copy" data-id="${esc(a.id)}">📋</button>
+      ${canModify(a)?`<button class="iconbtn" title="Edit (disputes)" data-act="edit" data-id="${esc(a.id)}">✏️</button>
+      <button class="iconbtn del" title="Delete" data-act="del" data-id="${esc(a.id)}">🗑</button>`:''}
+    </div></td></tr>`;
+}
+function renderAuditTable(container, list){
+  list = sortAudits(list);
+  const rows = list.slice(0, 300);
+  container.innerHTML = list.length ? `
+    <table><thead><tr>
+      <th>Audit ID</th><th>Date</th><th>Agent</th><th>Team Leader</th><th>Case #</th>
+      <th>Validation</th><th>Expected Code</th><th>Auditor</th><th>Actions</th>
+    </tr></thead><tbody>${rows.map(auditRow).join('')}</tbody></table>
+    ${list.length > 300 ? `<div class="empty">Showing first 300 of ${list.length} — narrow the filters or export CSV.</div>` : ''}`
+    : '<div class="empty">No audits match the current filters. Submit one from the Resolution Code Audit tab.</div>';
+  container.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => rowAction(b.dataset.act, b.dataset.id)));
+}
+function rowAction(act, id){
+  const a = findAudit(id); if (!a) return;
+  if (act === 'view') viewAudit(a);
+  else if (act === 'copy') copyAudit(a);
+  else if (act === 'edit') startEdit(a);
+  else if (act === 'del') deleteAudit(a);
+}
+function viewAudit(a){
+  const di = (l,v,full) => `<div class="di${full?' full':''}"><b>${l}</b>${esc(v||'—')}</div>`;
+  openModal('👁 ' + a.id, `
+    <div class="dgrid">
+      ${di('Audit Date', a.date)}${di('Validation', a.validation)}
+      ${di('Agent', a.agentName + (a.agentEid ? ' · EID '+a.agentEid : ''))}${di('Agent Email', a.agentEmail)}
+      ${di('Team Leader', a.teamLeader)}${di('TL Email', a.tlEmail)}
+      ${di('Operations Manager', a.om)}${di('OM Email', a.omEmail)}
+      ${di('LOB / Account', a.lob)}${di('Region', a.region)}
+      ${di('Case Number', a.caseNumber)}${di('Genesys ID / URL', a.genesysId)}
+      ${di('Case Resolution (as tagged)', a.caseResolution, true)}
+      ${di('Expected Resolution Code', a.expectedCode, true)}
+      ${di('Remarks & Coaching Notes', a.remarks, true)}
+      ${di('Auditor', a.auditorName + ' <' + (a.auditorEmail||'') + '>')}${di('Invalid Email Sent', a.emailSent||'No')}
+      ${di('Created', fmtDateTime(a.createdAt))}${di('Last Updated', fmtDateTime(a.updatedAt))}
+    </div>`,
+    `<button class="btn" onclick="App.closeModal()">Close</button>
+     <button class="btn" onclick='App.copyAuditById(${JSON.stringify(a.id)})'>📋 Copy</button>
+     ${a.validation==='Invalid' ? `<button class="btn" onclick='App.emailAuditById(${JSON.stringify(a.id)})'>✉️ Open Email Draft</button>` : ''}
+     ${canModify(a)?`<button class="btn primary" onclick='App.closeModal();App.startEditById(${JSON.stringify(a.id)})'>✏️ Edit Audit</button>`:''}`);
+}
+function auditSummaryText(a){
+  return [
+    `Audit ID: ${a.id}`, `Date: ${a.date}`, `Agent: ${a.agentName} (EID ${a.agentEid||'—'})`,
+    `Team Leader: ${a.teamLeader||'—'}  |  OM: ${a.om||'—'}`, `Case #: ${a.caseNumber}`,
+    `Genesys: ${a.genesysId}`, `Validation: ${a.validation}`,
+    `Case Resolution (tagged): ${a.caseResolution}`, `Expected Resolution Code: ${a.expectedCode}`,
+    `Auditor: ${a.auditorName}`, `Remarks: ${a.remarks}`,
+  ].join('\n');
+}
+function copyAudit(a){
+  navigator.clipboard.writeText(auditSummaryText(a))
+    .then(()=>toast('Audit summary copied to clipboard.','good'))
+    .catch(()=>toast('Clipboard blocked — open View and copy manually.','warn'));
+}
+function deleteAudit(a){
+  if (!canModify(a)) { toast('You can only delete your own audits.','bad'); return; }
+  openModal('🗑 Delete ' + a.id, `<p style="font-size:13.5px;line-height:1.6">Permanently delete audit <b>${esc(a.id)}</b> for
+    <b>${esc(a.agentName)}</b> (case ${esc(a.caseNumber)})?<br><br>This removes it for the whole team on the next sync. This cannot be undone.</p>`,
+    `<button class="btn" onclick="App.closeModal()">Cancel</button>
+     <button class="btn danger" onclick='App.confirmDelete(${JSON.stringify(a.id)})'>Delete Permanently</button>`);
+}
+function confirmDelete(id){
+  const a = findAudit(id); if (!a) return closeModal();
+  audits = audits.filter(x => x.id !== id);
+  tombs.push({ id, at: nowIso(), by: session.email });
+  save(LS.audits, audits); save(LS.tombs, tombs);
+  logAction('DELETE_AUDIT', id);
+  markDirty(); closeModal(); render();
+  toast(id + ' deleted.', 'warn');
+}
+
+/* ================================================================
+   AUDIT FORM
+   ================================================================ */
+function populateCodeSelects(){
+  $('#fResolution').innerHTML = '<option value="Valid (Pass)">Valid (Pass)</option>'
+    + settings.invalidResolutions.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('#fExpected').innerHTML = settings.expectedCodes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+function renderForm(){
+  populateCodeSelects();
+  if (!$('#fDate').value) $('#fDate').value = todayIso();
+  $('#fDate').max = todayIso();
+  $('#fAuditor').value = session ? session.name : '';
+  $('#agentCount').textContent = master.agents.length
+    ? `${master.agents.length} agents loaded · ${settings.orgName}`
+    : '⚠ No agent masterlist loaded yet — admin can import it in Admin Center, or use "Add Quick".';
+}
+function agentLine2(a){
+  return `TL: ${a.teamLeader||'—'} · OM: ${a.om||'—'}${a.agentEmail ? ' · '+a.agentEmail : ''}`;
+}
+function agentSearchList(q){
+  q = q.trim().toLowerCase();
+  if (q.length < 2) return [];
+  return master.agents.filter(a =>
+    (a.agentName||'').toLowerCase().includes(q) ||
+    (a.agentEid||'').toLowerCase().includes(q) ||
+    (a.agentEmail||'').toLowerCase().includes(q)).slice(0, 8);
+}
+function renderAc(items){
+  const el = $('#acList');
+  if (!items.length) { el.style.display='none'; el.innerHTML=''; return; }
+  el.innerHTML = items.map((a,i) => `
+    <div class="ac-item" data-i="${i}">
+      <div class="l1">${esc(a.agentName)} <span style="color:var(--muted);font-weight:500">· EID: ${esc(a.agentEid||'—')}</span></div>
+      <div class="l2">${esc(agentLine2(a))}</div>
+    </div>`).join('');
+  el.style.display='block';
+  el.querySelectorAll('.ac-item').forEach(d => d.addEventListener('mousedown', e => { e.preventDefault(); selectAgent(items[+d.dataset.i]); }));
+}
+function selectAgent(a){
+  selectedAgent = a;
+  $('#fAgent').value = a.agentName + (a.agentEid ? ' · ' + a.agentEid : '');
+  $('#fTL').value = a.teamLeader||''; $('#fOM').value = a.om||'';
+  $('#fTLEmail').value = a.tlEmail||''; $('#fOMEmail').value = a.omEmail||'';
+  $('#fLOB').value = a.lob||'';
+  $('#acList').style.display='none';
+}
+function clearAgent(){
+  selectedAgent = null;
+  ['fTL','fOM','fTLEmail','fOMEmail','fLOB'].forEach(id => $('#'+id).value='');
+}
+function quickAddAgent(){
+  openModal('＋ Quick Add Agent', `
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Adds the agent to the shared masterlist so auto-fill works for everyone. Fill what you know.</p>
+    <div class="formgrid">
+      <div class="field"><label>Agent Name <span class="req">*</span></label><input id="qaName" type="text"></div>
+      <div class="field"><label>Agent EID</label><input id="qaEid" type="text"></div>
+      <div class="field"><label>Agent Email</label><input id="qaEmail" type="email"></div>
+      <div class="field"><label>Team Leader</label><input id="qaTL" type="text"></div>
+      <div class="field"><label>TL Email</label><input id="qaTLEmail" type="email"></div>
+      <div class="field"><label>Operations Manager</label><input id="qaOM" type="text"></div>
+      <div class="field"><label>OM Email</label><input id="qaOMEmail" type="email"></div>
+      <div class="field"><label>LOB / Account</label><input id="qaLOB" type="text" value="HP"></div>
+    </div>`,
+    `<button class="btn" onclick="App.closeModal()">Cancel</button>
+     <button class="btn primary" onclick="App.saveQuickAgent()">Save Agent</button>`);
+}
+function saveQuickAgent(){
+  const name = $('#qaName').value.trim();
+  if (!name) { toast('Agent name is required.','bad'); return; }
+  const a = { agentName:name, agentEid:$('#qaEid').value.trim(), agentEmail:$('#qaEmail').value.trim(),
+    teamLeader:$('#qaTL').value.trim(), om:$('#qaOM').value.trim(),
+    tlEmail:$('#qaTLEmail').value.trim(), omEmail:$('#qaOMEmail').value.trim(),
+    lob:$('#qaLOB').value.trim(), region:'', source:'quick-add' };
+  master.agents.push(a); master.updatedAt = nowIso();
+  save(LS.master, master); markDirty();
+  logAction('QUICK_ADD_AGENT', name);
+  closeModal(); selectAgent(a); renderForm();
+  toast('Agent added to masterlist.','good');
+}
+function validateForm(){
+  const errs = [];
+  if (!$('#fAgent').value.trim()) errs.push('Agent Name / EID');
+  if (!$('#fDate').value) errs.push('Audit Date');
+  if (!$('#fCase').value.trim() || $('#fCase').value.trim().length < 4) errs.push('Case Number (min 4 chars)');
+  if (!$('#fGenesys').value.trim()) errs.push('Genesys Transaction ID / URL');
+  if (!$('#fRemarks').value.trim() || $('#fRemarks').value.trim().length < 10) errs.push('Remarks & Coaching Notes (min 10 chars)');
+  return errs;
+}
+function submitAudit(){
+  const errs = validateForm();
+  if (errs.length) { toast('Missing / invalid: ' + errs.join(', '), 'bad'); return; }
+  const caseNumber = $('#fCase').value.trim(), genesys = $('#fGenesys').value.trim();
+  const dupe = audits.find(a => a.id !== editingId
+    && a.caseNumber.trim().toLowerCase() === caseNumber.toLowerCase()
+    && a.genesysId.trim().toLowerCase() === genesys.toLowerCase());
+  if (dupe) { toast(`Duplicate blocked: case ${caseNumber} + this Genesys ID already audited in ${dupe.id}.`, 'bad'); return; }
+
+  const res = $('#fResolution').value;
+  const existing = editingId ? findAudit(editingId) : null;
+  const a = {
+    id: existing ? existing.id : nextAuditId(),
+    date: $('#fDate').value,
+    agentName: selectedAgent ? selectedAgent.agentName : $('#fAgent').value.trim(),
+    agentEid: selectedAgent ? (selectedAgent.agentEid||'') : '',
+    agentEmail: selectedAgent ? (selectedAgent.agentEmail||'') : '',
+    teamLeader: $('#fTL').value.trim(), om: $('#fOM').value.trim(),
+    tlEmail: $('#fTLEmail').value.trim(), omEmail: $('#fOMEmail').value.trim(),
+    region: selectedAgent ? (selectedAgent.region||'') : '', lob: $('#fLOB').value.trim(),
+    auditorName: session.name, auditorEmail: session.email,
+    caseNumber, genesysId: genesys,
+    caseResolution: res, expectedCode: $('#fExpected').value,
+    validation: isValidRes(res) ? 'Valid' : 'Invalid',
+    remarks: $('#fRemarks').value.trim(),
+    emailSent: existing ? existing.emailSent : 'No',
+    createdAt: existing ? existing.createdAt : nowIso(),
+    updatedAt: nowIso(),
+  };
+  if (existing) Object.assign(existing, a); else audits.unshift(a);
+  audits = sortAudits(audits);
+  save(LS.audits, audits); markDirty();
+  logAction(existing ? 'EDIT_AUDIT' : 'SUBMIT_AUDIT', a.id + ' ' + a.validation + ' ' + a.agentName);
+  const wasEdit = !!existing;
+  const submitted = existing || a;
+  editingId = null; $('#editBanner').classList.remove('show');
+  clearForm();
+  toast((wasEdit ? 'Audit updated: ' : 'Audit submitted: ') + submitted.id + ' (' + submitted.validation + ')', submitted.validation === 'Valid' ? 'good' : 'warn');
+  if (!wasEdit && submitted.validation === 'Invalid' && settings.emailEnabled) emailAudit(submitted, true);
+  renderTopActions();
+}
+function clearForm(){
+  ['fAgent','fCase','fGenesys','fRemarks'].forEach(id => $('#'+id).value='');
+  clearAgent();
+  $('#fDate').value = todayIso();
+  $('#fResolution').selectedIndex = 0; $('#fExpected').selectedIndex = 0;
+  if (editingId) { editingId = null; $('#editBanner').classList.remove('show'); renderTopActions(); }
+}
+function startEdit(a){
+  if (!canModify(a)) { toast('You can only edit your own audits. Ask the admin for dispute changes.','bad'); return; }
+  editingId = a.id;
+  showView('form');
+  $('#editBannerText').textContent = '✏️ Editing ' + a.id + ' — submitted by ' + a.auditorName + '. Saving will update the audit for the whole team (dispute resolution).';
+  $('#editBanner').classList.add('show');
+  $('#fAgent').value = a.agentName + (a.agentEid ? ' · '+a.agentEid : '');
+  selectedAgent = { agentName:a.agentName, agentEid:a.agentEid, agentEmail:a.agentEmail,
+    teamLeader:a.teamLeader, om:a.om, tlEmail:a.tlEmail, omEmail:a.omEmail, region:a.region, lob:a.lob };
+  $('#fTL').value=a.teamLeader||''; $('#fOM').value=a.om||''; $('#fTLEmail').value=a.tlEmail||'';
+  $('#fOMEmail').value=a.omEmail||''; $('#fLOB').value=a.lob||'';
+  $('#fDate').value=a.date; $('#fCase').value=a.caseNumber; $('#fGenesys').value=a.genesysId;
+  $('#fRemarks').value=a.remarks;
+  populateCodeSelects();
+  $('#fResolution').value = a.caseResolution; if ($('#fResolution').selectedIndex < 0) $('#fResolution').selectedIndex = 0;
+  $('#fExpected').value = a.expectedCode; if ($('#fExpected').selectedIndex < 0) $('#fExpected').selectedIndex = 0;
+  renderTopActions();
+}
+function cancelEdit(){ clearForm(); toast('Edit cancelled.','warn'); }
+
+/* ---------------- invalid-audit email (Outlook draft via mailto) ---------------- */
+function emailAudit(a, auto){
+  const to = [a.tlEmail, a.omEmail].filter(Boolean).join(';');
+  const cc = settings.emailCc || '';
+  const subject = settings.emailSubject
+    .replace('{audit_id}', a.id).replace('{agent}', a.agentName).replace('{case}', a.caseNumber);
+  const body =
+`QUALITY AUDIT NOTIFICATION — INVALID RESOLUTION CODE
+
+${auditSummaryText(a)}
+
+ACTION REQUIRED:
+Please review this transaction with the agent and acknowledge the coaching within 48 hours.
+Disputes: reply to this email with supporting details; the audit can be amended in EQMS.
+
+— ${a.auditorName}
+${settings.orgName} · ${settings.appTitle}`;
+  const url = 'mailto:' + encodeURIComponent(to)
+    + '?subject=' + encodeURIComponent(subject)
+    + (cc ? '&cc=' + encodeURIComponent(cc) : '')
+    + '&body=' + encodeURIComponent(body);
+  if (url.length > 7500) { toast('Email draft too long for Outlook — shorten remarks and use the ✉️ button in View.','warn'); }
+  const go = () => {
+    const link = document.createElement('a'); link.href = url; document.body.appendChild(link); link.click(); link.remove();
+    a.emailSent = 'Yes'; a.updatedAt = nowIso();
+    save(LS.audits, audits); markDirty();
+    logAction('EMAIL_DRAFT', a.id + ' → ' + (to||'(no recipients)'));
+  };
+  if (auto) {
+    openModal('✉️ Invalid Audit — Email Notification', `
+      <p style="font-size:13.5px;line-height:1.7">Audit <b>${esc(a.id)}</b> is <b style="color:var(--bad)">Invalid</b>.
+      An Outlook draft will open addressed to:</p>
+      <div class="dgrid" style="margin-top:10px">
+        <div class="di"><b>To (TL / OM)</b>${esc(to||'⚠ no TL/OM email on file')}</div>
+        <div class="di"><b>Cc (QA DL)</b>${esc(cc||'—')}</div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:12px">Review the draft in Outlook and press Send. Nothing is sent automatically without you seeing it.</p>`,
+      `<button class="btn" onclick="App.closeModal()">Skip</button>
+       <button class="btn primary" id="mailGo">✉️ Open Outlook Draft</button>`);
+    $('#mailGo').addEventListener('click', () => { go(); closeModal(); });
+  } else go();
+}
+
+/* ================================================================
+   HISTORY
+   ================================================================ */
+function renderHistory(){
+  const fb = $('#histFilters'); fb.innerHTML = filterBar('hist', true); bindFilterBar(fb);
+  const list = searchFilter(applyFilters(audits, filters.hist), filters.hist.search);
+  $('#histCount').textContent = list.length + ' audit' + (list.length===1?'':'s') + ' found';
+  renderAuditTable($('#histTable'), list);
+}
+
+/* ================================================================
+   ANALYTICS
+   ================================================================ */
+function renderAnalytics(){
+  const fb = $('#anaFilters');
+  fb.innerHTML = `<label>📅 Timeframe:
+      <select id="anaTime">${TIME_OPTS.map(([v,t])=>`<option value="${v}"${filters.ana.time===v?' selected':''}>${t}</option>`).join('')}</select>
+    </label><span class="spacer"></span>
+    <span style="font-size:12px;color:var(--muted)">Exports & scorecards respect this timeframe.</span>`;
+  $('#anaTime').addEventListener('change', e => { filters.ana.time = e.target.value; render(); });
+  const list = audits.filter(a => inTimeframe(a, filters.ana.time));
+
+  const byAuditor = {};
+  list.forEach(a => { const k=a.auditorName||'—'; (byAuditor[k]=byAuditor[k]||{t:0,v:0}); byAuditor[k].t++; if(a.validation==='Valid') byAuditor[k].v++; });
+  hBars($('#anaAuditors'), Object.entries(byAuditor).sort((x,y)=>y[1].t-x[1].t).slice(0,10)
+    .map(([k,s])=>({label:k, value:s.t, extra:`${s.t-s.v} invalid found`, color:'var(--accent)',
+      tip:`${k}: ${s.t} audits performed · flagged ${s.t-s.v} invalid`})));
+  hBars($('#anaTLs'), tlPerf(list).slice(0,10).map(r=>({
+    label:r.tl, value:r.total, extra:fmtPct(r.rate)+' pass',
+    color:r.rate >= settings.passTarget ? 'var(--good)' : 'var(--bad)',
+    tip:`${r.tl}: ${r.total} audits · ${fmtPct(r.rate)} pass (target ${settings.passTarget}%)`})));
+  const byCode = {};
+  list.forEach(a => { const k=a.expectedCode||'—'; byCode[k]=(byCode[k]||0)+1; });
+  hBars($('#anaCodes'), Object.entries(byCode).sort((x,y)=>y[1]-x[1]).slice(0,10)
+    .map(([k,v])=>({label:k, value:v, extra:fmtPct(pct(v,list.length)), color:'var(--accent)'})));
+}
+
+const CSV_HEADERS = ['Audit ID','Date','Auditor Name','Auditor Email','Agent','Agent EID','Agent Email',
+  'Team Leader','Operations Manager','TL Email','OM Email','Region','LOB','Case Number',
+  'Genesys Transaction ID','Validation','Case Resolution (Tagged)','Expected Resolution Code',
+  'Remarks','Quick Case','Email Sent','Created At','Updated At'];
+const auditCsvRow = a => [a.id,a.date,a.auditorName,a.auditorEmail,a.agentName,a.agentEid,a.agentEmail,
+  a.teamLeader,a.om,a.tlEmail,a.omEmail,a.region,a.lob,a.caseNumber,a.genesysId,a.validation,
+  a.caseResolution,a.expectedCode,a.remarks,isQuickCase(a)?'Yes':'No',a.emailSent,a.createdAt,a.updatedAt];
+
+function exportCsv(kind){
+  let list, name;
+  if (kind === 'filtered') { list = searchFilter(applyFilters(audits, filters.hist), filters.hist.search); name = 'EQMS_Filtered'; }
+  else {
+    list = audits.filter(a => inTimeframe(a, filters.ana.time)); name = 'EQMS_All_Audits';
+    if (kind === 'invalid') { list = list.filter(a=>a.validation==='Invalid'); name = 'EQMS_Invalid_Audits'; }
+    if (kind === 'qc') { list = list.filter(isQuickCase); name = 'EQMS_QuickCase_Audits'; }
+  }
+  if (!list.length) { toast('Nothing to export for the current selection.','warn'); return; }
+  download(name + '_' + todayIso() + '.csv', toCsv([CSV_HEADERS, ...sortAudits(list).map(auditCsvRow)]), 'text/csv;charset=utf-8');
+  logAction('EXPORT_CSV', kind + ' (' + list.length + ' rows)');
+  toast('Exported ' + list.length + ' audits.','good');
+}
+const ML_HEADERS = ['Agent Name','Agent EID','Agent Email','Team Leader','Operations Manager','Region','LOB','TL Email','OM Email'];
+function exportMasterlist(){
+  if (!master.agents.length) { toast('Masterlist is empty.','warn'); return; }
+  download('EQMS_Masterlist_' + todayIso() + '.csv',
+    toCsv([ML_HEADERS, ...master.agents.map(a=>[a.agentName,a.agentEid,a.agentEmail,a.teamLeader,a.om,a.region,a.lob,a.tlEmail,a.omEmail])]),
+    'text/csv;charset=utf-8');
+}
+function exportBackup(){
+  download('EQMS_Backup_' + todayIso() + '.json',
+    JSON.stringify({version:VER, exportedAt:nowIso(), audits, tombstones:tombs, master, settings}, null, 1),
+    'application/json');
+  toast('Full backup downloaded.','good');
+}
+
+/* ================================================================
+   ADMIN CENTER
+   ================================================================ */
+function parseCsv(text){
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQ) { if (c === '"') { if (text[i+1] === '"') { cell += '"'; i++; } else inQ = false; } else cell += c; }
+    else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(cell); cell=''; }
+    else if (c === '\n' || c === '\r') { if (c==='\r' && text[i+1]==='\n') i++; row.push(cell); cell='';
+      if (row.some(x=>x.trim()!=='')) rows.push(row); row=[]; }
+    else cell += c;
+  }
+  row.push(cell); if (row.some(x=>x.trim()!=='')) rows.push(row);
+  return rows;
+}
+const HDR_SYNONYMS = {
+  agentName:['agentname','name','agent','fullname','employeename'],
+  agentEid:['agenteid','eid','employeeid','employeenumber','empid','idnumber'],
+  agentEmail:['agentemail','email','emailaddress'],
+  teamLeader:['teamleader','tl','supervisor','tlname','teamlead'],
+  om:['operationsmanager','om','opsmanager','manager','omname'],
+  region:['region','site','location'],
+  lob:['lob','account','lineofbusiness','program','wdlob'],
+  tlEmail:['tlemail','teamleaderemail','supervisoremail'],
+  omEmail:['omemail','operationsmanageremail','manageremail'],
+};
+function importMasterlistText(text){
+  const rows = parseCsv(text);
+  if (rows.length < 2) { toast('Could not read any data rows. Paste/upload CSV with a header row.','bad'); return; }
+  const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const hdr = rows[0].map(norm);
+  const colFor = key => { for (const syn of HDR_SYNONYMS[key]) { const i = hdr.indexOf(syn); if (i>=0) return i; } return -1; };
+  const cols = {}; Object.keys(HDR_SYNONYMS).forEach(k => cols[k] = colFor(k));
+  if (cols.agentName < 0) { toast('No "Agent Name" column found. Check the header row.','bad'); return; }
+  const agents = [];
+  for (const r of rows.slice(1)) {
+    const g = k => cols[k] >= 0 ? String(r[cols[k]]||'').trim() : '';
+    const name = g('agentName'); if (!name) continue;
+    agents.push({ agentName:name, agentEid:g('agentEid'), agentEmail:g('agentEmail'),
+      teamLeader:g('teamLeader'), om:g('om'), region:g('region'), lob:g('lob'),
+      tlEmail:g('tlEmail'), omEmail:g('omEmail') });
+  }
+  if (!agents.length) { toast('Header recognized but no agent rows found.','bad'); return; }
+  master = { updatedAt: nowIso(), agents };
+  save(LS.master, master); markDirty();
+  logAction('IMPORT_MASTERLIST', agents.length + ' agents');
+  renderAdmin(); renderForm();
+  toast(agents.length + ' agents imported into the shared masterlist.','good');
+}
+
+function renderAdmin(){
+  if (!isAdmin()) { $('#adminGrid').innerHTML = '<div class="card">Restricted.</div>'; return; }
+  const g = $('#adminGrid');
+  g.innerHTML = `
+  <div class="card">
+    <h3>🔗 Team Live Sync (shared database)</h3>
+    <p style="font-size:12.5px;color:var(--text2);line-height:1.65;margin-bottom:10px">
+      One shared <b>EQMS_TeamDB.json</b> file in a SharePoint / OneDrive-synced folder is the team database.
+      Every auditor connects their copy of this HTML file to it once; the app then merges all uploads automatically
+      every 10 seconds — no server needed, works within Concentrix restrictions.</p>
+    <div class="kv"><label>Status</label><b>${syncHandle ? (syncError ? '⚠ ' + (syncError==='perm'?'Needs re-authorization':'Error') : '🟢 Connected: '+esc(syncHandle.name)) : '⚪ Not connected (local only)'}</b></div>
+    <div class="kv"><label>Last sync</label><b>${lastSync ? lastSync.toLocaleTimeString() : '—'}</b></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn primary sm" onclick="App.connectSync(true)">Create team DB file…</button>
+      <button class="btn sm" onclick="App.connectSync(false)">Connect existing file…</button>
+      <button class="btn sm" onclick="App.syncNow(true)">Sync now</button>
+      ${syncHandle?'<button class="btn danger sm" onclick="App.disconnectSync()">Disconnect</button>':''}
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Setup: create the file inside your team's synced SharePoint folder → share the folder with all auditors → each auditor clicks the sync pill (top right) → Connect. Requires Chrome or Edge.</p>
+  </div>
+
+  <div class="card">
+    <h3>👥 Agent Masterlist <span class="cap">${master.agents.length} agents${master.updatedAt?' · updated '+fmtDateTime(master.updatedAt):''}</span></h3>
+    <p style="font-size:12.5px;color:var(--text2);margin-bottom:10px">Import your Excel masterlist (save as CSV). Recognized columns:
+      Agent Name, Agent EID, Agent Email, Team Leader, Operations Manager, Region, LOB, TL Email, OM Email.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn primary sm" onclick="document.getElementById('mlFile').click()">📤 Upload CSV…</button>
+      <input type="file" id="mlFile" accept=".csv,text/csv" style="display:none">
+      <button class="btn sm" onclick="App.exportMasterlist()">📥 Export current</button>
+      <button class="btn sm" onclick="App.downloadMlTemplate()">📄 Download template</button>
+      ${master.agents.length?'<button class="btn danger sm" onclick="App.clearMasterlist()">Clear masterlist</button>':''}
+    </div>
+    <textarea class="list" id="mlPaste" placeholder="…or paste CSV rows here (first line = headers) and click Import Pasted."></textarea>
+    <div style="margin-top:8px"><button class="btn sm" onclick="App.importPastedMl()">Import Pasted</button></div>
+  </div>
+
+  <div class="card">
+    <h3>🏷️ Resolution Code Lists</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">One per line. These drive both form dropdowns for the whole team.</p>
+    <label style="font-size:12px;font-weight:700">Case Resolution options (invalid taggings)</label>
+    <textarea class="list" id="setInvalidRes">${esc(settings.invalidResolutions.join('\n'))}</textarea>
+    <label style="font-size:12px;font-weight:700;display:block;margin-top:10px">Expected Resolution Codes</label>
+    <textarea class="list" id="setExpected">${esc(settings.expectedCodes.join('\n'))}</textarea>
+  </div>
+
+  <div class="card">
+    <h3>✉️ Email Notifications (Invalid audits)</h3>
+    <div class="kv"><label>Open Outlook draft automatically on invalid submission</label>
+      <input type="checkbox" id="setEmailEnabled" ${settings.emailEnabled?'checked':''}></div>
+    <div class="kv"><label style="min-width:110px">Cc distribution list</label>
+      <input style="flex:1" type="text" id="setEmailCc" value="${esc(settings.emailCc)}" placeholder="qa-team@concentrix.com; lead@concentrix.com"></div>
+    <div class="kv"><label style="min-width:110px">Subject template</label>
+      <input style="flex:1" type="text" id="setEmailSubject" value="${esc(settings.emailSubject)}"></div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Drafts open in Outlook addressed to the agent's TL + OM with the full audit summary — the auditor just presses Send.
+    For fully hands-free sending, pair the team DB/CSV exports with a Power Automate flow (see README notes).</p>
+  </div>
+
+  <div class="card">
+    <h3>🧑‍✈️ Users & Access</h3>
+    <div class="kv"><label style="min-width:110px">Administrator email</label>
+      <input style="flex:1" type="email" id="setAdminEmail" value="${esc(settings.adminEmail)}"></div>
+    <div class="kv"><label>Restrict sign-in to authorized auditors only</label>
+      <input type="checkbox" id="setRestrict" ${settings.restrictLogin?'checked':''}></div>
+    <label style="font-size:12px;font-weight:700;display:block;margin-top:8px">Authorized auditor emails (one per line)</label>
+    <textarea class="list" id="setUsers">${esc(settings.authorizedUsers.join('\n'))}</textarea>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ Branding, Links & Rules</h3>
+    <div class="kv"><label style="min-width:130px">Organization label</label><input style="flex:1" type="text" id="setOrg" value="${esc(settings.orgName)}"></div>
+    <div class="kv"><label style="min-width:130px">CDAX Guidelines URL</label><input style="flex:1" type="url" id="setCdax" value="${esc(settings.cdaxUrl)}" placeholder="https://…"></div>
+    <div class="kv"><label style="min-width:130px">Instant Ink Matrix URL</label><input style="flex:1" type="url" id="setInk" value="${esc(settings.inkUrl)}" placeholder="https://…"></div>
+    <div class="kv"><label style="min-width:130px">TL pass-rate target %</label><input type="number" min="0" max="100" id="setTarget" value="${esc(settings.passTarget)}" style="width:90px"></div>
+    <div style="margin-top:12px"><button class="btn primary" onclick="App.saveAdminSettings()">💾 Save All Settings (syncs to team)</button></div>
+  </div>
+
+  <div class="card">
+    <h3>💾 Data Management</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sm" onclick="App.exportBackup()">Full JSON backup</button>
+      <button class="btn sm" onclick="document.getElementById('restoreFile').click()">Import / merge backup…</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+      <button class="btn sm" onclick="App.loadSampleData()">Load sample demo data</button>
+      <button class="btn danger sm" onclick="App.wipeLocal()">Wipe THIS device's local data</button>
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Wipe only clears this browser — the shared team DB file is untouched. Reconnect to it to re-download everything.</p>
+  </div>
+
+  <div class="card" style="grid-column:1/-1">
+    <h3>📜 Activity Log <span class="cap">last ${Math.min(logbook.length,100)} events on this device</span></h3>
+    <div class="tbl-scroll" style="max-height:260px">
+      <table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>${logbook.slice(0,100).map(l=>`<tr><td style="white-space:nowrap">${esc(fmtDateTime(l.ts))}</td><td>${esc(l.user)}</td><td><b>${esc(l.action)}</b></td><td>${esc(l.details)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No activity yet.</td></tr>'}</tbody></table>
+    </div>
+  </div>`;
+
+  $('#mlFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    f.text().then(importMasterlistText).catch(err => toast('Read failed: '+err.message,'bad'));
+    e.target.value = '';
+  });
+  $('#restoreFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    f.text().then(t => {
+      const data = JSON.parse(t);
+      const r = mergeRemote(data);
+      save(LS.audits,audits); save(LS.tombs,tombs); save(LS.master,master); save(LS.settings,settings);
+      markDirty(); render();
+      toast('Backup merged.' + (r.changedLocal ? ' New records added.' : ' Nothing new.'),'good');
+      logAction('IMPORT_BACKUP', f.name);
+    }).catch(err => toast('Restore failed: '+err.message,'bad'));
+    e.target.value = '';
+  });
+}
+function importPastedMl(){ const t = $('#mlPaste').value; if (!t.trim()) { toast('Paste CSV first.','warn'); return; } importMasterlistText(t); }
+function downloadMlTemplate(){
+  download('EQMS_Masterlist_Template.csv', toCsv([ML_HEADERS,
+    ['Bhardwaj, Sundeep','101688555','sundeep.bhardwaj@concentrix.com','Chan, Caroline','Chan, Caroline','PH','HP','caroline.chan@concentrix.com','caroline.chan@concentrix.com']]),
+    'text/csv;charset=utf-8');
+}
+function clearMasterlist(){
+  master = { updatedAt: nowIso(), agents: [] };
+  save(LS.master, master); markDirty(); renderAdmin(); renderForm();
+  toast('Masterlist cleared (for the whole team on next sync).','warn');
+}
+function saveAdminSettings(){
+  const lines = id => $(id).value.split('\n').map(s=>s.trim()).filter(Boolean);
+  settings.invalidResolutions = lines('#setInvalidRes');
+  settings.expectedCodes = lines('#setExpected');
+  settings.emailEnabled = $('#setEmailEnabled').checked;
+  settings.emailCc = $('#setEmailCc').value.trim();
+  settings.emailSubject = $('#setEmailSubject').value.trim() || defaultSettings().emailSubject;
+  settings.adminEmail = $('#setAdminEmail').value.trim() || settings.adminEmail;
+  settings.restrictLogin = $('#setRestrict').checked;
+  settings.authorizedUsers = lines('#setUsers');
+  settings.orgName = $('#setOrg').value.trim() || settings.orgName;
+  settings.cdaxUrl = $('#setCdax').value.trim();
+  settings.inkUrl = $('#setInk').value.trim();
+  settings.passTarget = Math.max(0, Math.min(100, +$('#setTarget').value || 90));
+  settings.updatedAt = nowIso();
+  save(LS.settings, settings); markDirty();
+  logAction('SAVE_SETTINGS','');
+  populateCodeSelects(); renderTopActions();
+  toast('Settings saved — will reach the team on next sync.','good');
+}
+function wipeLocal(){
+  openModal('⚠ Wipe local data', '<p style="font-size:13.5px;line-height:1.6">This deletes all EQMS data stored in <b>this browser only</b> (audits, masterlist, settings, session). The shared team DB file is NOT touched. Continue?</p>',
+    `<button class="btn" onclick="App.closeModal()">Cancel</button>
+     <button class="btn danger" onclick="Object.values(${JSON.stringify(LS)}).forEach(k=>localStorage.removeItem(k));indexedDB.deleteDatabase('eqms7-sync');location.reload()">Wipe & Reload</button>`);
+}
+function loadSampleData(){
+  if (!master.agents.length) {
+    master = { updatedAt: nowIso(), agents: [
+      {agentName:'Belgica, Jessa Sarmiento', agentEid:'102220859', agentEmail:'jessa.belgica@concentrix.com', teamLeader:'Sernal, Rachelle Ibiernas', om:'Chan, Caroline', region:'PH', lob:'HP', tlEmail:'rachelle.sernal@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+      {agentName:'Bhardwaj, Sundeep Taneza', agentEid:'101688555', agentEmail:'sundeep.bhardwaj@concentrix.com', teamLeader:'Chan, Caroline Cruce', om:'Chan, Caroline Cruce', region:'PH', lob:'HP', tlEmail:'caroline.chan@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+      {agentName:'Dela Cruz, Juan Miguel', agentEid:'103300111', agentEmail:'juan.delacruz@concentrix.com', teamLeader:'Reyes, Maria Lourdes', om:'Chan, Caroline', region:'PH', lob:'HP', tlEmail:'maria.reyes@concentrix.com', omEmail:'caroline.chan@concentrix.com'},
+    ]};
+    save(LS.master, master);
+  }
+  const mk = (daysAgo, agentIdx, res, exp) => {
+    const d = new Date(); d.setDate(d.getDate()-daysAgo);
+    const date = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const ag = master.agents[agentIdx % master.agents.length];
+    const a = { id: nextAuditId(), date, agentName:ag.agentName, agentEid:ag.agentEid, agentEmail:ag.agentEmail,
+      teamLeader:ag.teamLeader, om:ag.om, tlEmail:ag.tlEmail, omEmail:ag.omEmail, region:ag.region, lob:ag.lob,
+      auditorName: session.name, auditorEmail: session.email,
+      caseNumber: String(5039980000 + Math.floor(Math.random()*9999)),
+      genesysId: 'GEN-' + Math.random().toString(36).slice(2,10).toUpperCase(),
+      caseResolution: res, expectedCode: exp, validation: isValidRes(res)?'Valid':'Invalid',
+      remarks: 'Sample demo audit — replace with real evaluations. Agent tagged "'+res+'" but interaction supports "'+exp+'".',
+      emailSent:'No', createdAt: new Date(d.getTime()+36e5).toISOString(), updatedAt: new Date(d.getTime()+36e5).toISOString() };
+    audits.push(a);
+  };
+  mk(0,0,'Valid (Pass)','Remote Solution (HW/SW Resolved Remotely via Troubleshooting)');
+  mk(0,1,'Quick Case (Invalid)','Referred – for Hardware Service');
+  mk(1,2,'Onsite Solution (Invalid)','Parts Shipped (CSR Part / RC Whole Unit)');
+  mk(2,0,'Valid (Pass)','Quick Case');
+  mk(3,1,'Parts Shipped (Invalid)','Onsite Solution (Break & Fix / Onsite Repair)');
+  mk(5,2,'Referred – for Hardware Service (Invalid)','Exchange Solution (Whole Unit Exchange)');
+  mk(6,0,'Quick Case (Invalid)','Remote Solution (HW/SW Resolved Remotely via Troubleshooting)');
+  mk(8,1,'Valid (Pass)','Onsite Solution (Break & Fix / Onsite Repair)');
+  audits = sortAudits(audits);
+  save(LS.audits, audits); markDirty(); render();
+  toast('Sample data loaded — delete rows or wipe local data to remove.','good');
+}
+
+/* ================================================================
+   MODAL / THEME / BOOT
+   ================================================================ */
+function openModal(title, body, foot){
+  $('#modalTitle').innerHTML = title;
+  $('#modalBody').innerHTML = body;
+  $('#modalFoot').innerHTML = foot || '<button class="btn" onclick="App.closeModal()">Close</button>';
+  $('#modalOverlay').classList.add('show');
+}
+function closeModal(){ $('#modalOverlay').classList.remove('show'); }
+function toggleTheme(){
+  const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  save(LS.theme, t);
+}
+function render(){
+  if (currentView==='exec') renderExec();
+  else if (currentView==='qc') renderQC();
+  else if (currentView==='form') renderForm();
+  else if (currentView==='history') renderHistory();
+  else if (currentView==='analytics') renderAnalytics();
+  else if (currentView==='admin') renderAdmin();
+}
+function boot(){
+  $('#login').style.display = 'none';
+  $('#app').style.display = 'flex';
+  $('#uName').textContent = session.name;
+  $('#uRole').textContent = isAdmin() ? 'Administrator' : 'Quality Auditor';
+  $('#navAdmin').style.display = isAdmin() ? 'flex' : 'none';
+  $('#brandTitle').textContent = settings.appTitle;
+  document.title = settings.appTitle;
+  renderTopActions();
+  renderForm();
+  render();
+  restoreSyncHandle();
+}
+function init(){
+  tip.el = $('#tip');
+  document.documentElement.dataset.theme = load(LS.theme, 'dark');
+  $('#nav').addEventListener('click', e => { const b = e.target.closest('.nav-item'); if (b) showView(b.dataset.view); });
+  $('#modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); $('#acList').style.display='none'; } });
+
+  const agentInput = $('#fAgent');
+  agentInput.addEventListener('input', () => { clearAgent(); renderAc(agentSearchList(agentInput.value)); });
+  agentInput.addEventListener('focus', () => renderAc(agentSearchList(agentInput.value)));
+  agentInput.addEventListener('blur', () => setTimeout(()=>{ $('#acList').style.display='none'; }, 150));
+  $('#execSearch').addEventListener('input', debounce(()=>{ if(currentView==='exec') renderExec(); }, 200));
+  $('#qcSearch').addEventListener('input', debounce(()=>{ if(currentView==='qc') renderQC(); }, 200));
+  window.addEventListener('beforeunload', () => { if (dirty && syncHandle) syncNow(); });
+
+  if (session) {
+    boot();
+  } else {
+    $('#login').style.display = 'flex';
+    $('#loginEmail').addEventListener('keydown', e => { if (e.key==='Enter') signIn(); });
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+
+/* ---------------- public API (for inline handlers) ---------------- */
+return {
+  signIn, signOut, toggleTheme, refresh, showView,
+  connectSync, disconnectSync, syncNow, quickAddAgent, saveQuickAgent,
+  submitAudit, clearForm, cancelEdit, closeModal,
+  confirmDelete, exportCsv, exportMasterlist, exportBackup,
+  importPastedMl, downloadMlTemplate, clearMasterlist, saveAdminSettings,
+  wipeLocal, loadSampleData,
+  copyAuditById: id => { const a = findAudit(id); if (a) copyAudit(a); },
+  emailAuditById: id => { const a = findAudit(id); if (a) emailAudit(a, false); closeModal(); },
+  startEditById: id => { const a = findAudit(id); if (a) startEdit(a); },
+};
+})();
+</script>
+</body>
+</html>
