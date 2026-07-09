@@ -124,6 +124,10 @@ def style_block(ws, rng, fill=None, font=None, align=None, bdr=True):
             if bdr: c.border = border
 
 wb = Workbook()
+# iterative calculation: required by the Audit Log's self-referencing date stamp
+wb.calculation.iterate = True
+wb.calculation.iterateCount = 1
+wb.calculation.iterateDelta = 0.001
 
 # ---------------------------------------------------------------- START HERE
 ws = wb.active
@@ -144,8 +148,9 @@ lines = [
     "auditor's entries to everyone else within seconds, automatically. Do NOT download personal copies.",
     "",
     "HOW TO LOG AN AUDIT  (sheet: Audit Log)",
-    "  1. Go to the first empty row and enter the Audit Date.",
-    "  2. Pick the Agent Name from the dropdown — EID, emails, TL, OM, SOM auto-fill instantly.",
+    "  1. Go to the first empty row and pick the Agent Name from the dropdown — the Audit Date",
+    "     stamps itself with TODAY, and EID, emails, TL, OM, SOM auto-fill instantly.",
+    "     (Backdating an audit? Just type the date over the auto-stamp.)",
     "  3. Fill Channel (if blank), Case Number, Genesys Transaction ID.",
     "  4. Pick 'Validation Result / Case Resolution': 'Valid (Pass)' or the invalid defect reason.",
     "  5. Pick the Expected Resolution Code, type your Remarks, pick your Auditor Name.",
@@ -263,6 +268,10 @@ def mail_body(r):
     )
 def formulas_for(r):
     return {
+        # self-referencing timestamp: stamps TODAY() once when the agent is picked,
+        # then keeps that value (requires workbook iterative calculation, set below).
+        # Typing a date manually overwrites the formula = intentional backdating.
+        "auditDate": f'=IF($C{r}="","",IF(OR($B{r}="",$B{r}=0),TODAY(),$B{r}))',
         "auditId": f'=IF($C{r}="","","AUD-{YEAR}-"&TEXT(ROW()-1,"000000"))',
         "agentEid": f'=IF($C{r}="","",{LK("A", r)})',
         "agentEmail": f'=IF($C{r}="","",{LK("C", r)})',
