@@ -1824,7 +1824,42 @@ function boot(){
   render();
   restoreSyncHandle();
 }
+/* Detect the SharePoint/Teams HTML previewer: it runs pages in a sandboxed
+   iframe where file pickers and storage are blocked, so nothing can work. */
+function inSandboxedViewer(){
+  let framed = false;
+  try { framed = window.self !== window.top; } catch { framed = true; }
+  const spHost = /sharepoint\.com$|sharepointonline\.com$|officeapps\.live\.com$/i.test(location.hostname);
+  return framed || (location.protocol.startsWith('http') && spHost);
+}
+let forceUnsandboxed = false;
+function showViewerBlock(){
+  const d = document.createElement('div');
+  d.id = 'viewerBlock';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:#0e1420';
+  d.innerHTML = `
+    <div style="max-width:560px;background:#1b2333;border:1px solid #c98500;border-radius:14px;padding:30px;color:#e8ecf4;font:14px/1.7 system-ui,'Segoe UI',sans-serif">
+      <h1 style="font-size:18px;margin-bottom:10px">⚠️ EQMS can't run inside the SharePoint viewer</h1>
+      <p style="color:#9aa7bf">You opened this file from the SharePoint website, which locks it in a preview sandbox —
+      the team database and saving are blocked here. Open it from your PC instead:</p>
+      <ol style="margin:14px 0 14px 20px;color:#e8ecf4">
+        <li>Go back to the SharePoint folder and click <b>“Add shortcut to OneDrive”</b> (one time).</li>
+        <li>Open <b>File Explorer</b> → your OneDrive → the <b>EQMS</b> folder.</li>
+        <li>Double-click <b>EQMS.html</b> there. The address bar should start with <b>C:\\</b> — not sharepoint.com.</li>
+      </ol>
+      <p style="color:#6b7891;font-size:12.5px">Tip: right-click EQMS.html in that folder → Send to → Desktop (create shortcut) for one-click access every day.</p>
+      <p style="margin-top:14px"><a href="#" onclick="App.forceStart();return false" style="color:#3987e5;font-size:12px">Continue anyway (not recommended)</a></p>
+    </div>`;
+  document.body.appendChild(d);
+}
+function forceStart(){
+  forceUnsandboxed = true;
+  const d = document.getElementById('viewerBlock');
+  if (d) d.remove();
+  init();
+}
 function init(){
+  if (inSandboxedViewer() && !forceUnsandboxed) { showViewerBlock(); return; }
   tip.el = $('#tip');
   document.documentElement.dataset.theme = load(LS.theme, 'dark');
   $('#nav').addEventListener('click', e => { const b = e.target.closest('.nav-item'); if (b) showView(b.dataset.view); });
@@ -1850,7 +1885,7 @@ document.addEventListener('DOMContentLoaded', init);
 
 /* ---------------- public API (for inline handlers) ---------------- */
 return {
-  signIn, signOut, toggleTheme, refresh, showView,
+  signIn, signOut, toggleTheme, refresh, showView, forceStart,
   connectSync, disconnectSync, syncNow, quickAddAgent, saveQuickAgent,
   submitAudit, clearForm, cancelEdit, closeModal,
   confirmDelete, exportCsv, exportMasterlist, exportBackup,
