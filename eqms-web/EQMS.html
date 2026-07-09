@@ -490,7 +490,7 @@ const defaultSettings = () => ({
   validReasons: DEFAULT_VALID_REASONS.slice(),
   emailEnabled: true,
   emailCc: '',
-  emailSubject: '[EQMS] Invalid Audit {audit_id} - {agent} - Case {case}',
+  emailSubject: '[INVALID] Quality audit monitoring completed for {agent}',
   cdaxUrl: '', inkUrl: '',
   passTarget: 90,
 });
@@ -535,6 +535,7 @@ const _rawSettings = load(LS.settings, {});
 // migrate pre-roster field names
 if (_rawSettings.invalidResolutions && !_rawSettings.invalidReasons) _rawSettings.invalidReasons = _rawSettings.invalidResolutions;
 if (_rawSettings.expectedCodes && !_rawSettings.validReasons) _rawSettings.validReasons = _rawSettings.expectedCodes;
+if (_rawSettings.emailSubject === '[EQMS] Invalid Audit {audit_id} - {agent} - Case {case}') delete _rawSettings.emailSubject;
 let settings = Object.assign(defaultSettings(), _rawSettings);
 let audits   = load(LS.audits, []);
 let master   = Object.assign({updatedAt:'', agents:[]}, load(LS.master, {}));
@@ -1331,45 +1332,73 @@ function startEdit(a){
 }
 function cancelEdit(){ clearForm(); toast('Edit cancelled.','warn'); }
 
-/* ---------------- invalid-audit email (Outlook draft via mailto) ---------------- */
+/* ---------------- invalid-audit email (formatted Outlook draft, .eml) ----------------
+   A .eml file with "X-Unsent: 1" opens in Outlook desktop as an editable,
+   ready-to-send draft — with full HTML formatting, unlike mailto:. */
+function buildEmailHtml(a){
+  const row = (l, v, red) => `
+    <tr>
+      <td style="border:1px solid #d0d0d0;background:#f2f2f2;padding:6px 10px;font-weight:bold;width:220px">${esc(l)}</td>
+      <td style="border:1px solid #d0d0d0;padding:6px 10px;${red?'color:#c00000;font-weight:bold;':''}">${esc(v||'—')}</td>
+    </tr>`;
+  const band = (txt, bg) => `
+    <tr><td colspan="2" style="border:1px solid ${bg};background:${bg};color:#ffffff;padding:7px 10px;font-weight:bold;letter-spacing:.4px">${esc(txt)}</td></tr>`;
+  const channelLob = [a.queue, a.lob].filter(Boolean).join(' / ');
+  return `<!DOCTYPE html><html><body style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a">
+  <p>Hi ${esc(a.teamLeader || 'Team Leader')},<br>Good day!</p>
+  <p>A quality monitoring audit has been completed for <b>${esc(a.agentName)}</b>.</p>
+  <p>Quality audit details below. Feel free to review and revert should you have any questions.</p>
+  <table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;max-width:860px;font-size:10.5pt">
+    ${band('QUALITY AUDIT DETAILS', '#1f3864')}
+    ${row('Agent Name', a.agentName)}
+    ${row('Audit Date', a.date)}
+    ${row('Team Leader', a.teamLeader)}
+    ${row('Case Number', a.caseNumber)}
+    ${row('Transaction ID', a.genesysId)}
+    ${row('Channel / LOB', channelLob)}
+    ${row('Evaluator', a.auditorName)}
+    ${band('INVALID QUALITY AUDIT DETAILS', '#c00000')}
+    ${row('Validation', 'Invalid', true)}
+    ${row('Invalid Reason', a.caseResolution)}
+    ${row('Expected Resolution Code', a.expectedCode)}
+    ${row('Remarks', a.remarks)}
+  </table>
+  <p style="color:#7a7a7a;font-size:9pt;margin-top:14px">This is an automated notification from ${esc(settings.appTitle)}.</p>
+  </body></html>`;
+}
 function emailAudit(a, auto){
-  const to = [a.tlEmail, a.omEmail].filter(Boolean).join(';');
+  const to = [a.tlEmail, a.omEmail].filter(Boolean).join('; ');
   const cc = settings.emailCc || '';
-  const subject = settings.emailSubject
-    .replace('{audit_id}', a.id).replace('{agent}', a.agentName).replace('{case}', a.caseNumber);
-  const body =
-`QUALITY AUDIT NOTIFICATION — INVALID RESOLUTION CODE
-
-${auditSummaryText(a)}
-
-ACTION REQUIRED:
-Please review this transaction with the agent and acknowledge the coaching within 48 hours.
-Disputes: reply to this email with supporting details; the audit can be amended in EQMS.
-
-— ${a.auditorName}
-${settings.orgName} · ${settings.appTitle}`;
-  const url = 'mailto:' + encodeURIComponent(to)
-    + '?subject=' + encodeURIComponent(subject)
-    + (cc ? '&cc=' + encodeURIComponent(cc) : '')
-    + '&body=' + encodeURIComponent(body);
-  if (url.length > 7500) { toast('Email draft too long for Outlook — shorten remarks and use the ✉️ button in View.','warn'); }
+  const subject = (settings.emailSubject || '[INVALID] Quality audit monitoring completed for {agent}')
+    .replace('{audit_id}', a.id).replace('{agent}', (a.agentName||'').toUpperCase()).replace('{case}', a.caseNumber);
+  const eml = [
+    'To: ' + to,
+    cc ? 'Cc: ' + cc : null,
+    'Subject: ' + subject,
+    'X-Unsent: 1',
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+  ].filter(Boolean).join('\r\n') + '\r\n\r\n' + buildEmailHtml(a);
   const go = () => {
-    const link = document.createElement('a'); link.href = url; document.body.appendChild(link); link.click(); link.remove();
+    download('Invalid_Audit_' + a.id + '.eml', eml, 'message/rfc822');
     a.emailSent = 'Yes'; a.updatedAt = nowIso();
     save(LS.audits, audits); markDirty();
     logAction('EMAIL_DRAFT', a.id + ' → ' + (to||'(no recipients)'));
+    toast('Draft downloaded — click it in the downloads bar to open in Outlook, then press Send.','good');
   };
   if (auto) {
     openModal('✉️ Invalid Audit — Email Notification', `
       <p style="font-size:13.5px;line-height:1.7">Audit <b>${esc(a.id)}</b> is <b style="color:var(--bad)">Invalid</b>.
-      An Outlook draft will open addressed to:</p>
+      A formatted Outlook draft will be prepared, addressed to:</p>
       <div class="dgrid" style="margin-top:10px">
         <div class="di"><b>To (TL / OM)</b>${esc(to||'⚠ no TL/OM email on file')}</div>
         <div class="di"><b>Cc (QA DL)</b>${esc(cc||'—')}</div>
       </div>
-      <p style="font-size:12px;color:var(--muted);margin-top:12px">Review the draft in Outlook and press Send. Nothing is sent automatically without you seeing it.</p>`,
+      <p style="font-size:12px;color:var(--muted);margin-top:12px">Click the button, then open the downloaded
+      <b>Invalid_Audit_${esc(a.id)}.eml</b> (bottom of Chrome / Downloads) — it opens in Outlook as a ready-to-send
+      draft with the full audit table. Review and press Send.</p>`,
       `<button class="btn" onclick="App.closeModal()">Skip</button>
-       <button class="btn primary" id="mailGo">✉️ Open Outlook Draft</button>`);
+       <button class="btn primary" id="mailGo">✉️ Prepare Outlook Draft</button>`);
     $('#mailGo').addEventListener('click', () => { go(); closeModal(); });
   } else go();
 }
@@ -1675,7 +1704,9 @@ function renderAdmin(){
       <input style="flex:1" type="text" id="setEmailCc" value="${esc(settings.emailCc)}" placeholder="qa-team@concentrix.com; lead@concentrix.com"></div>
     <div class="kv"><label style="min-width:110px">Subject template</label>
       <input style="flex:1" type="text" id="setEmailSubject" value="${esc(settings.emailSubject)}"></div>
-    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Drafts open in Outlook addressed to the agent's TL + OM with the full audit summary — the auditor just presses Send.</p>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">Placeholders: <code>{agent}</code>, <code>{audit_id}</code>, <code>{case}</code>.
+    Invalid submissions produce a formatted Outlook draft (.eml) addressed to the agent's TL + OM with the full audit table —
+    the auditor opens the download and presses Send.</p>
   </div>
 
   <div class="card">

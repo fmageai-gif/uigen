@@ -48,11 +48,15 @@ re-authorize file access — one click on the status pill.
 
 ## Invalid-audit email notifications
 
-Submitting an **Invalid** audit opens a fully pre-written Outlook draft
-addressed to the agent's TL + OM (Cc: the QA distribution list configured in
-Admin Center) containing the complete audit summary and a 48-hour coaching
-acknowledgement request — the auditor just presses **Send**. The audit's
-*Email Sent* flag is tracked in the database.
+Submitting an **Invalid** audit generates a formatted Outlook draft
+(`Invalid_Audit_<ID>.eml`, `X-Unsent: 1`) addressed to the agent's TL + OM
+(Cc: the QA distribution list from Admin Center). The body is a styled HTML
+table — QUALITY AUDIT DETAILS (navy) + INVALID QUALITY AUDIT DETAILS (red) —
+with agent, date, TL, case number, transaction ID, channel/LOB, evaluator,
+invalid reason, expected code and remarks. The auditor clicks the downloaded
+file, it opens in Outlook as a ready-to-send draft, they press **Send**.
+The audit's *Email Sent* flag is tracked in the database. Subject template
+(`{agent}`, `{audit_id}`, `{case}` placeholders) is editable in Admin Center.
 
 ## Roles & disputes
 
