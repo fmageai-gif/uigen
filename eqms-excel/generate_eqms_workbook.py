@@ -126,10 +126,6 @@ def style_block(ws, rng, fill=None, font=None, align=None, bdr=True):
             if bdr: c.border = border
 
 wb = Workbook()
-# iterative calculation: required by the Audit Log's self-referencing date stamp
-wb.calculation.iterate = True
-wb.calculation.iterateCount = 1
-wb.calculation.iterateDelta = 0.001
 
 # ---------------------------------------------------------------- START HERE
 ws = wb.active
@@ -150,9 +146,10 @@ lines = [
     "auditor's entries to everyone else within seconds, automatically. Do NOT download personal copies.",
     "",
     "HOW TO LOG AN AUDIT  (sheet: Audit Log)",
-    "  1. Go to the first empty row and pick the Agent Name from the dropdown — the Audit Date",
-    "     stamps itself with TODAY, and EID, emails, TL, OM, SOM auto-fill instantly.",
-    "     (Backdating an audit? Just type the date over the auto-stamp.)",
+    "  1. Go to the first empty row, type the Audit Date (shortcut: Ctrl+; inserts today), and",
+    "     pick the Agent Name from the dropdown — EID, emails, TL, OM, SOM auto-fill instantly.",
+    "     A RED date cell means the audit has no date yet — it will NOT count on any dashboard",
+    "     until the date is filled in.",
     "  3. Fill Channel (if blank), Case Number, Genesys Transaction ID.",
     "  4. Pick 'Validation Result / Case Resolution': 'Valid (Pass)' or the invalid defect reason.",
     "  5. Pick the Expected Resolution Code, type your Remarks, pick your Auditor Name.",
@@ -276,11 +273,11 @@ def mail_body(r):
         f'&"This is an automated notification from HP Mainstream EQMS."'
     )
 def formulas_for(r):
+    # NOTE: auditDate is deliberately a typed field. The self-referencing
+    # TODAY() stamp (iterative calculation) is not honored reliably by Excel
+    # Online, and when it breaks every dashboard reads zero — audits are
+    # counted by their date. Ctrl+; types today's date in one keystroke.
     return {
-        # self-referencing timestamp: stamps TODAY() once when the agent is picked,
-        # then keeps that value (requires workbook iterative calculation, set below).
-        # Typing a date manually overwrites the formula = intentional backdating.
-        "auditDate": f'=IF($C{r}="","",IF(OR($B{r}="",$B{r}=0),TODAY(),$B{r}))',
         "auditId": f'=IF($C{r}="","","AUD-{YEAR}-"&TEXT(ROW()-1,"000000"))',
         "agentEid": f'=IF($C{r}="","",{LK("A", r)})',
         "agentEmail": f'=IF($C{r}="","",{LK("C", r)})',
@@ -330,6 +327,10 @@ log.conditional_formatting.add(f"O2:O{LAST}",
 log.conditional_formatting.add(f"M2:M{LAST}",
     FormulaRule(formula=[f'AND($M2<>"",COUNTIF($M$2:$M${LAST},$M2)>1)'],
                 fill=PatternFill("solid", start_color="FFE49C")))
+# an audit without a date is invisible to every dashboard — flag it loudly
+log.conditional_formatting.add(f"B2:B{LAST}",
+    FormulaRule(formula=['AND($C2<>"",$B2="")'],
+                fill=PatternFill("solid", start_color="FFC7CE")))
 # data validations
 def dv_list(name, target):
     d = DataValidation(type="list", formula1=f"={name}", allow_blank=True, showErrorMessage=True)
