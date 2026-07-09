@@ -22,7 +22,8 @@ from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.series import DataPoint
 from openpyxl.formatting.rule import CellIsRule, FormulaRule
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
+from openpyxl.worksheet.protection import SheetProtection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -161,6 +162,10 @@ lines = [
     "DASHBOARDS",
     "  'Dashboard' and 'Quick Case Dashboard' update live. Use the yellow filter cells at the top",
     "  (Timeframe / Team Leader / Auditor / Validation). Charts and KPIs follow the filters.",
+    "  Quick case audits are counted SEPARATELY: the Executive Dashboard covers regular audits",
+    "  only; anything tagged or expected as Quick Case appears on the Quick Case Dashboard.",
+    "  Locked cells: grey/automatic columns (incl. O validation) and dashboard layouts are",
+    "  protected — only entry columns and the yellow filter cells accept typing.",
     "",
     "RULES (please respect them — the formulas depend on it)",
     "  •  Only type in the WHITE columns of Audit Log. Grey columns are automatic — don't overwrite.",
@@ -330,6 +335,16 @@ dv_list("AgentNames", f"C2:C{LAST}")
 dv_list("ResOptions", f"P2:P{LAST}")
 dv_list("ExpOptions", f"Q2:Q{LAST}")
 dv_list("AuditorNames", f"S2:S{LAST}")
+# protection: only the entry columns are typable; every auto column (incl.
+# O validation) is locked. No password — protection guards against accidents.
+ENTRY_COLS = [2, 3, 13, 14, 16, 17, 18, 19]   # B C M N P Q R S
+for r in range(2, LAST + 1):
+    for c in ENTRY_COLS:
+        log.cell(row=r, column=c).protection = Protection(locked=False)
+log.protection = SheetProtection(
+    sheet=True, autoFilter=False, sort=False,
+    formatCells=False, formatColumns=False, formatRows=False,
+    selectLockedCells=False, selectUnlockedCells=False)
 
 # ---------------------------------------------------------------- named ranges
 def add_name(name, ref):
@@ -350,7 +365,9 @@ def build_calc(name, dash, qc_only):
     cs.sheet_state = "hidden"
     D = f"'{dash}'"
     LOGC = lambda c: f"'Audit Log'!${c}$2:${c}${LAST}"
-    qc_pair = f",{LOGC('T')},\"Yes\"" if qc_only else ""
+    # quick-case audits are computed separately: the executive engine counts
+    # ONLY regular audits (quickCase="No"), the QC engine ONLY quick cases.
+    qc_pair = f",{LOGC('T')},\"{'Yes' if qc_only else 'No'}\""
     base = (f"{LOGC('B')},\">=\"&$B$2,{LOGC('F')},$B$3,{LOGC('S')},$B$4" + qc_pair)
     cs["A1"] = "filter engine"
     cs["A2"], cs["A3"], cs["A4"], cs["A5"] = "startDate", "tlCrit", "auditorCrit", "valCrit"
@@ -436,8 +453,8 @@ def build_dashboard(title, calc, qc):
     for col, w in zip("ABCDEFGHIJK", [2, 14, 22, 13, 26, 10, 24, 12, 14, 16, 16]):
         d.column_dimensions[col].width = w
     d.merge_cells("B1:K1")
-    d["B1"] = ("⚡ QUICK CASE DASHBOARD — live" if qc else "🛡 EXECUTIVE DASHBOARD — live") + \
-              "  (co-authoring: everyone sees the same numbers)"
+    d["B1"] = ("⚡ QUICK CASE DASHBOARD — quick case audits only" if qc
+               else "🛡 EXECUTIVE DASHBOARD — regular audits (quick cases counted on their own dashboard)")
     d["B1"].font = f_title; d["B1"].fill = fill_navy; d["B1"].alignment = center
     d.row_dimensions[1].height = 30
     # filter row (yellow editable cells)
@@ -449,12 +466,15 @@ def build_dashboard(title, calc, qc):
     for lbl_cell, lbl, val_cell, list_name, default in filters:
         d[lbl_cell] = lbl; d[lbl_cell].font = Font(bold=True, size=10)
         d[val_cell] = default; d[val_cell].fill = yellow; d[val_cell].border = border
+        d[val_cell].protection = Protection(locked=False)
         dv = DataValidation(type="list", formula1=f"={list_name}", allow_blank=False)
         d.add_data_validation(dv); dv.add(val_cell)
     d.row_dimensions[2].height = 22
+    d.protection = SheetProtection(sheet=True, formatCells=False,
+                                   selectLockedCells=False, selectUnlockedCells=False)
     # KPI cards
     C = f"'{calc.title}'"
-    kpis = [("B4", "C5", "FILTERED AUDITS" if not qc else "QUICK CASE AUDITS", f"={C}!$B$7", None, NAVY),
+    kpis = [("B4", "C5", "REGULAR AUDITS" if not qc else "QUICK CASE AUDITS", f"={C}!$B$7", None, NAVY),
             ("D4", "E5", "VALID AUDITS", f"={C}!$B$8", None, GREEN),
             ("F4", "G5", "INVALID AUDITS", f"={C}!$B$9", None, RED),
             ("H4", "I5", "INVALID PERCENTAGE", f"={C}!$B$10", "0.0%", RED)]
