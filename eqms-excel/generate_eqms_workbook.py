@@ -164,6 +164,9 @@ lines = [
     "  (Timeframe / Team Leader / Auditor / Validation). Charts and KPIs follow the filters.",
     "  Quick case audits are counted SEPARATELY: the Executive Dashboard covers regular audits",
     "  only; anything tagged or expected as Quick Case appears on the Quick Case Dashboard.",
+    "  'Special Codes' tracks Remote Solution, DNAP, SubCan and Void side by side (keyword match",
+    "  on the tagged or expected code). Admin: to start logging DNAP/SubCan, add their reason",
+    "  texts on the Lists sheet — spare dropdown slots are already wired in.",
     "  Locked cells: grey/automatic columns (incl. O validation) and dashboard layouts are",
     "  protected — only entry columns and the yellow filter cells accept typing.",
     "",
@@ -350,8 +353,10 @@ log.protection = SheetProtection(
 def add_name(name, ref):
     wb.defined_names[name] = DefinedName(name, attr_text=ref)
 add_name("AgentNames", f"Lists!$H$2:$H${len(agents)+1}")
-add_name("ResOptions", f"Lists!$A$2:$A${len(res_options)+1}")
-add_name("ExpOptions", f"Lists!$B$2:$B${len(VALID_REASONS)+1}")
+# +8 spare rows so the admin can append new reasons (e.g. DNAP / SubCan texts)
+# on the Lists sheet and have them appear in the form dropdowns immediately
+add_name("ResOptions", f"Lists!$A$2:$A${len(res_options)+9}")
+add_name("ExpOptions", f"Lists!$B$2:$B${len(VALID_REASONS)+9}")
 add_name("AuditorNames", f"Lists!$C$2:$C${len(AUDITORS)+1}")
 add_name("Timeframes", f"Lists!$D$2:$D${len(TIMEFRAMES)+1}")
 add_name("ValFilter", "Lists!$F$2:$F$4")
@@ -563,8 +568,118 @@ calc_qc = build_calc("CalcQC", "Quick Case Dashboard", qc_only=True)
 build_dashboard("Dashboard", calc_main, qc=False)
 build_dashboard("Quick Case Dashboard", calc_qc, qc=True)
 
-# sheet order: START HERE, Dashboard, QC Dashboard, Audit Log, Roster, Lists, (hidden calcs)
-order = ["START HERE", "Dashboard", "Quick Case Dashboard", "Audit Log", "Roster", "Lists", "Calc", "CalcQC"]
+# ---------------------------------------------------------------- special codes
+# One page tracking four watched resolution-code categories side by side.
+# An audit counts toward a category when the tagged Case Resolution OR the
+# Expected Resolution Code contains the keyword (independent of the main
+# dashboards, which stay exactly as they are).
+CODE_CATS = [
+    ("Remote Solution", "Remote Solution", BLUE),
+    ("DNAP", "DNAP", ORANGE),
+    ("SubCan", "SubCan", "7030A0"),
+    ("Void", "Void", "555F6E"),
+]
+def build_codes_dashboard():
+    cs = wb.create_sheet("CalcCodes")
+    cs.sheet_state = "hidden"
+    D = "'Special Codes'"
+    LOGC = lambda c: f"'Audit Log'!${c}$2:${c}${LAST}"
+    cs["A2"], cs["A3"], cs["A4"] = "startDate", "tlCrit", "auditorCrit"
+    cs["B2"] = (f'=IF({D}!$C$2="All Time",0,IF({D}!$C$2="Today",TODAY(),'
+                f'IF({D}!$C$2="Last 7 Days",TODAY()-6,IF({D}!$C$2="Last 14 Days",TODAY()-13,'
+                f'IF({D}!$C$2="Last 30 Days",TODAY()-29,DATE(YEAR(TODAY()),MONTH(TODAY()),1))))))')
+    cs["B3"] = f'=IF({D}!$E$2="All Team Leaders","*",{D}!$E$2)'
+    cs["B4"] = f'=IF({D}!$G$2="All Auditors","*",{D}!$G$2)'
+    cs["A7"], cs["J7"], cs["K7"] = "Category", "Valid", "Invalid"
+    base = f'{LOGC("B")},">="&$B$2,{LOGC("F")},$B$3,{LOGC("S")},$B$4'
+    for i, (label, kw, _color) in enumerate(CODE_CATS):
+        r = 8 + i
+        cs.cell(row=r, column=1, value=label)
+        cs.cell(row=r, column=2, value=kw)
+        # inclusion-exclusion over tagged (P) and expected (Q) columns
+        cs.cell(row=r, column=3, value=f'=COUNTIFS({base},{LOGC("P")},"*"&$B{r}&"*")')
+        cs.cell(row=r, column=4, value=f'=COUNTIFS({base},{LOGC("Q")},"*"&$B{r}&"*")')
+        cs.cell(row=r, column=5, value=f'=COUNTIFS({base},{LOGC("P")},"*"&$B{r}&"*",{LOGC("Q")},"*"&$B{r}&"*")')
+        cs.cell(row=r, column=6, value=f'=$C{r}+$D{r}-$E{r}')
+        cs.cell(row=r, column=7, value=f'=COUNTIFS({base},{LOGC("P")},"*"&$B{r}&"*",{LOGC("O")},"Valid")')
+        cs.cell(row=r, column=8, value=f'=COUNTIFS({base},{LOGC("Q")},"*"&$B{r}&"*",{LOGC("O")},"Valid")')
+        cs.cell(row=r, column=9, value=f'=COUNTIFS({base},{LOGC("P")},"*"&$B{r}&"*",{LOGC("Q")},"*"&$B{r}&"*",{LOGC("O")},"Valid")')
+        cs.cell(row=r, column=10, value=f'=$G{r}+$H{r}-$I{r}')
+        cs.cell(row=r, column=11, value=f'=$F{r}-$J{r}')
+        cs.cell(row=r, column=12, value=f'=IFERROR($K{r}/$F{r},0)')
+        cs.cell(row=r, column=12).number_format = "0.0%"
+
+    d = wb.create_sheet("Special Codes")
+    d.sheet_properties.tabColor = "7030A0"
+    d.sheet_view.showGridLines = False
+    for col, w in zip("ABCDEFGHIJK", [2, 16, 14, 14, 14, 4, 16, 14, 14, 14, 4]):
+        d.column_dimensions[col].width = w
+    d.merge_cells("B1:J1")
+    d["B1"] = "📌 SPECIAL CODES DASHBOARD — Remote Solution · DNAP · SubCan · Void"
+    d["B1"].font = f_title; d["B1"].fill = fill_navy; d["B1"].alignment = center
+    d.row_dimensions[1].height = 30
+    yellow = PatternFill("solid", start_color="FFF2CC")
+    filters = [("B2", "📅 Timeframe", "C2", "Timeframes", "All Time"),
+               ("D2", "👤 Team Leader", "E2", "TLFilter", "All Team Leaders"),
+               ("F2", "🏷 Auditor", "G2", "AudFilter", "All Auditors")]
+    for lbl_cell, lbl, val_cell, list_name, default in filters:
+        d[lbl_cell] = lbl; d[lbl_cell].font = Font(bold=True, size=10)
+        d[val_cell] = default; d[val_cell].fill = yellow; d[val_cell].border = border
+        d[val_cell].protection = Protection(locked=False)
+        dv = DataValidation(type="list", formula1=f"={list_name}", allow_blank=False)
+        d.add_data_validation(dv); dv.add(val_cell)
+    d.row_dimensions[2].height = 22
+
+    # 2×2 grid of category scorecards
+    slots = [("B", 4), ("G", 4), ("B", 10), ("G", 10)]
+    from openpyxl.utils import column_index_from_string
+    for (col, row), (label, _kw, color), ci in zip(slots, CODE_CATS, range(4)):
+        c0 = column_index_from_string(col)
+        band = f"{col}{row}:{get_column_letter(c0+3)}{row}"
+        d.merge_cells(band)
+        cell = d[f"{col}{row}"]
+        cell.value = label.upper()
+        cell.font = Font(bold=True, size=12, color="FFFFFF")
+        cell.fill = PatternFill("solid", start_color=color)
+        cell.alignment = center
+        d.row_dimensions[row].height = 24
+        labels = ["AUDITS", "VALID", "INVALID", "INVALID %"]
+        cr = 8 + ci
+        vals = [f"='CalcCodes'!$F${cr}", f"='CalcCodes'!$J${cr}", f"='CalcCodes'!$K${cr}", f"='CalcCodes'!$L${cr}"]
+        colors = [NAVY, GREEN, RED, RED]
+        for j in range(4):
+            lc = d.cell(row=row+1, column=c0+j, value=labels[j])
+            lc.font = f_lbl; lc.alignment = center
+            vc = d.cell(row=row+2, column=c0+j, value=vals[j])
+            vc.font = Font(bold=True, size=16, color=colors[j]); vc.alignment = center
+            if j == 3: vc.number_format = "0.0%"
+    d["B16"] = ("Counting rule: an audit belongs to a category when its tagged Case Resolution OR its Expected "
+                "Resolution Code contains the keyword. Categories are independent of the Executive and Quick Case "
+                "dashboards (those are unchanged) and may overlap each other.")
+    d["B16"].font = Font(size=9, color="777777")
+    d.merge_cells("B16:J16")
+
+    # grouped bar: valid vs invalid per category
+    chart = BarChart(); chart.type = "col"; chart.title = "Valid vs Invalid by Special Code"
+    chart.height = 8.5; chart.width = 21; chart.gapWidth = 80
+    data = Reference(cs, min_col=10, max_col=11, min_row=7, max_row=11)
+    cats = Reference(cs, min_col=1, min_row=8, max_row=11)
+    chart.add_data(data, titles_from_data=True); chart.set_categories(cats)
+    chart.series[0].graphicalProperties.solidFill = GREEN
+    chart.series[1].graphicalProperties.solidFill = RED
+    chart.x_axis.delete = False; chart.y_axis.delete = False
+    chart.x_axis.tickLblPos = "nextTo"; chart.y_axis.tickLblPos = "nextTo"
+    chart.dLbls = DataLabelList(); chart.dLbls.showVal = True
+    chart.dLbls.showSerName = False; chart.dLbls.showCatName = False; chart.dLbls.showLegendKey = False
+    d.add_chart(chart, "B18")
+    d.protection = SheetProtection(sheet=True, formatCells=False,
+                                   selectLockedCells=False, selectUnlockedCells=False)
+
+build_codes_dashboard()
+
+# sheet order: START HERE, dashboards, Audit Log, Roster, Lists, (hidden calcs)
+order = ["START HERE", "Dashboard", "Quick Case Dashboard", "Special Codes",
+         "Audit Log", "Roster", "Lists", "Calc", "CalcQC", "CalcCodes"]
 wb._sheets = [wb[n] for n in order]
 
 wb.save(OUT)
