@@ -346,11 +346,12 @@ textarea.list{min-height:150px; width:100%; font-size:12.5px}
               <div class="ac-list" id="acList" style="display:none"></div>
             </div>
             <div class="field"><label>Team Leader</label><input type="text" id="fTL" readonly placeholder="Auto-filled"></div>
-            <div class="field"><label>LOB / Account</label><input type="text" id="fLOB" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>Operations Manager</label><input type="text" id="fOM" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>TL Email</label><input type="text" id="fTLEmail" readonly placeholder="Auto-filled"></div>
             <div class="field"><label>OM Email</label><input type="text" id="fOMEmail" readonly placeholder="Auto-filled"></div>
-            <div class="field"><label>Queue / Channel</label><input type="text" id="fQueue" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>SOM Email</label><input type="text" id="fSOMEmail" readonly placeholder="Auto-filled"></div>
+            <div class="field"><label>Channel / Queue</label><input type="text" id="fQueue" placeholder="Auto-filled or type (e.g. Voice, Chat)"></div>
+            <div class="field"><label>Internal LOB</label><input type="text" id="fLOB" placeholder="Auto-filled or type (e.g. HP Mainstream)"></div>
             <div class="field"><label>Audit Date <span class="req">*</span></label><input type="date" id="fDate"></div>
             <div class="field"><label>Auditor Name <span class="req">*</span></label><input type="text" id="fAuditor" readonly></div>
             <div class="field" style="visibility:hidden"></div>
@@ -1120,7 +1121,8 @@ function viewAudit(a){
       ${di('Agent', a.agentName + (a.agentEid ? ' · EID '+a.agentEid : ''))}${di('Agent Email', a.agentEmail)}
       ${di('Team Leader', a.teamLeader)}${di('TL Email', a.tlEmail)}
       ${di('Operations Manager', a.om)}${di('OM Email', a.omEmail)}
-      ${di('LOB / Account', a.lob)}${di('Queue / Channel', a.queue)}
+      ${di('SOM', a.som)}${di('SOM Email', a.somEmail)}
+      ${di('Internal LOB', a.lob)}${di('Channel / Queue', a.queue)}
       ${di('Case Number', a.caseNumber)}${di('Genesys ID / URL', a.genesysId)}
       ${di('Case Resolution (as tagged)', a.caseResolution, true)}
       ${di('Expected Resolution Code', a.expectedCode, true)}
@@ -1208,12 +1210,13 @@ function selectAgent(a){
   $('#fAgent').value = a.agentName + (a.agentEid ? ' · ' + a.agentEid : '');
   $('#fTL').value = a.teamLeader||''; $('#fOM').value = a.om||'';
   $('#fTLEmail').value = a.tlEmail||''; $('#fOMEmail').value = a.omEmail||'';
+  $('#fSOMEmail').value = a.somEmail||'';
   $('#fLOB').value = a.lob||''; $('#fQueue').value = a.queue||'';
   $('#acList').style.display='none';
 }
 function clearAgent(){
   selectedAgent = null;
-  ['fTL','fOM','fTLEmail','fOMEmail','fLOB','fQueue'].forEach(id => $('#'+id).value='');
+  ['fTL','fOM','fTLEmail','fOMEmail','fSOMEmail','fLOB','fQueue'].forEach(id => $('#'+id).value='');
 }
 function quickAddAgent(){
   openModal('＋ Quick Add Agent', `
@@ -1226,8 +1229,9 @@ function quickAddAgent(){
       <div class="field"><label>TL Email</label><input id="qaTLEmail" type="email"></div>
       <div class="field"><label>Operations Manager</label><input id="qaOM" type="text"></div>
       <div class="field"><label>OM Email</label><input id="qaOMEmail" type="email"></div>
-      <div class="field"><label>LOB / Account</label><input id="qaLOB" type="text" value="HP"></div>
-      <div class="field"><label>Queue / Channel</label><input id="qaQueue" type="text"></div>
+      <div class="field"><label>SOM Email</label><input id="qaSOMEmail" type="email"></div>
+      <div class="field"><label>Internal LOB</label><input id="qaLOB" type="text" value="HP Mainstream"></div>
+      <div class="field"><label>Channel / Queue</label><input id="qaQueue" type="text"></div>
     </div>`,
     `<button class="btn" onclick="App.closeModal()">Cancel</button>
      <button class="btn primary" onclick="App.saveQuickAgent()">Save Agent</button>`);
@@ -1239,7 +1243,7 @@ function saveQuickAgent(){
     teamLeader:$('#qaTL').value.trim(), om:$('#qaOM').value.trim(),
     tlEmail:$('#qaTLEmail').value.trim(), omEmail:$('#qaOMEmail').value.trim(),
     lob:$('#qaLOB').value.trim(), queue:$('#qaQueue').value.trim(), region:'',
-    som:'', somEmail:'', source:'quick-add' };
+    som:'', somEmail:$('#qaSOMEmail').value.trim(), source:'quick-add' };
   master.agents.push(a); master.updatedAt = nowIso();
   save(LS.master, master); markDirty();
   logAction('QUICK_ADD_AGENT', name);
@@ -1276,6 +1280,7 @@ function submitAudit(){
     tlEmail: $('#fTLEmail').value.trim(), omEmail: $('#fOMEmail').value.trim(),
     region: selectedAgent ? (selectedAgent.region||'') : '', lob: $('#fLOB').value.trim(),
     queue: $('#fQueue').value.trim(),
+    som: selectedAgent ? (selectedAgent.som||'') : '', somEmail: $('#fSOMEmail').value.trim(),
     auditorName: session.name, auditorEmail: session.email,
     caseNumber, genesysId: genesys,
     caseResolution: res, expectedCode: $('#fExpected').value,
@@ -1312,9 +1317,11 @@ function startEdit(a){
   $('#editBanner').classList.add('show');
   $('#fAgent').value = a.agentName + (a.agentEid ? ' · '+a.agentEid : '');
   selectedAgent = { agentName:a.agentName, agentEid:a.agentEid, agentEmail:a.agentEmail,
-    teamLeader:a.teamLeader, om:a.om, tlEmail:a.tlEmail, omEmail:a.omEmail, region:a.region, lob:a.lob, queue:a.queue };
+    teamLeader:a.teamLeader, om:a.om, tlEmail:a.tlEmail, omEmail:a.omEmail, region:a.region,
+    lob:a.lob, queue:a.queue, som:a.som, somEmail:a.somEmail };
   $('#fTL').value=a.teamLeader||''; $('#fOM').value=a.om||''; $('#fTLEmail').value=a.tlEmail||'';
-  $('#fOMEmail').value=a.omEmail||''; $('#fLOB').value=a.lob||''; $('#fQueue').value=a.queue||'';
+  $('#fOMEmail').value=a.omEmail||''; $('#fSOMEmail').value=a.somEmail||'';
+  $('#fLOB').value=a.lob||''; $('#fQueue').value=a.queue||'';
   $('#fDate').value=a.date; $('#fCase').value=a.caseNumber; $('#fGenesys').value=a.genesysId;
   $('#fRemarks').value=a.remarks;
   populateCodeSelects();
@@ -1418,13 +1425,13 @@ function renderDefectDistribution(container, list){
 const CSV_HEADERS = ['auditId','auditDate','agentName','agentEid','agentEmail','teamLeader','tlEmail',
   'operationsManager','omEmail','caseNumber','genesysTransactionId','queue','lob','validation','reason',
   'remarks','auditorName','createdAt',
-  'expectedResolutionCode','quickCase','emailSent','auditorEmail','updatedAt'];
+  'expectedResolutionCode','quickCase','emailSent','auditorEmail','som','somEmail','updatedAt'];
 /* reason = valid case reason for Valid audits, invalid defect reason for Invalid ones */
 const auditReason = a => a.validation === 'Valid' ? a.expectedCode : a.caseResolution;
 const auditCsvRow = a => [a.id,a.date,a.agentName,a.agentEid,a.agentEmail,a.teamLeader,a.tlEmail,
   a.om,a.omEmail,a.caseNumber,a.genesysId,a.queue||'',a.lob,a.validation,auditReason(a),
   a.remarks,a.auditorName,a.createdAt,
-  a.expectedCode,isQuickCase(a)?'Yes':'No',a.emailSent,a.auditorEmail,a.updatedAt];
+  a.expectedCode,isQuickCase(a)?'Yes':'No',a.emailSent,a.auditorEmail,a.som||'',a.somEmail||'',a.updatedAt];
 
 function exportCsv(kind){
   let list, name;
@@ -1484,9 +1491,85 @@ const HDR_SYNONYMS = {
   lob:['internallob','lob','account','lineofbusiness','program','wdlob'],
   region:['region','site','location'],
 };
+/* ---- minimal .xlsx reader (zip + sheet XML), no libraries ---- */
+const unescapeXml = s => String(s)
+  .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+  .replace(/&#x([0-9a-fA-F]+);/g, (_,h)=>String.fromCodePoint(parseInt(h,16)))
+  .replace(/&#(\d+);/g, (_,d)=>String.fromCodePoint(+d))
+  .replace(/&amp;/g,'&');
+async function inflateRaw(bytes){
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function unzip(buf){
+  const b = new Uint8Array(buf), dv = new DataView(buf);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65558); i--)
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('not a valid Excel (.xlsx) file');
+  const count = dv.getUint16(eocd+10, true);
+  let off = dv.getUint32(eocd+16, true);
+  const entries = {};
+  for (let n = 0; n < count; n++){
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off+10, true), csize = dv.getUint32(off+20, true);
+    const nameLen = dv.getUint16(off+28, true), extraLen = dv.getUint16(off+30, true), cmtLen = dv.getUint16(off+32, true);
+    const lho = dv.getUint32(off+42, true);
+    const name = new TextDecoder().decode(b.subarray(off+46, off+46+nameLen));
+    entries[name] = { method, csize, lho };
+    off += 46 + nameLen + extraLen + cmtLen;
+  }
+  return {
+    names: Object.keys(entries),
+    async read(name){
+      const e = entries[name]; if (!e) return null;
+      const nl = dv.getUint16(e.lho+26, true), el = dv.getUint16(e.lho+28, true);
+      const data = b.subarray(e.lho+30+nl+el, e.lho+30+nl+el+e.csize);
+      return e.method === 0 ? data : await inflateRaw(data);
+    },
+  };
+}
+async function parseXlsxRows(buf){
+  const z = await unzip(buf);
+  const dec = new TextDecoder();
+  const shared = [];
+  const ssRaw = await z.read('xl/sharedStrings.xml');
+  if (ssRaw) for (const si of dec.decode(ssRaw).match(/<si(?:\s[^>]*)?>[\s\S]*?<\/si>/g) || []) {
+    let txt = '';
+    for (const t of si.match(/<t(?:\s[^>]*)?>[\s\S]*?<\/t>/g) || []) txt += t.replace(/^<t[^>]*>|<\/t>$/g, '');
+    shared.push(unescapeXml(txt));
+  }
+  const sheetName = z.names.filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+    .sort((a,b) => (+a.match(/\d+/)[0]) - (+b.match(/\d+/)[0]))[0];
+  if (!sheetName) throw new Error('no worksheet found in the Excel file');
+  const xml = dec.decode(await z.read(sheetName));
+  const rows = [];
+  for (const rowXml of xml.match(/<row[\s>][\s\S]*?<\/row>/g) || []) {
+    const cells = [];
+    for (const cm of rowXml.match(/<c[\s>][\s\S]*?(?:<\/c>|\/>)/g) || []) {
+      const ref = (cm.match(/r="([A-Z]+)\d+"/) || [])[1];
+      let ci = cells.length;
+      if (ref) { ci = 0; for (const ch of ref) ci = ci*26 + (ch.charCodeAt(0)-64); ci--; }
+      const type = (cm.match(/t="([^"]+)"/) || [])[1] || '';
+      let val = '';
+      if (type === 'inlineStr') val = unescapeXml(((cm.match(/<t[^>]*>([\s\S]*?)<\/t>/) || [])[1]) || '');
+      else {
+        const v = (cm.match(/<v[^>]*>([\s\S]*?)<\/v>/) || [])[1];
+        if (v !== undefined) val = type === 's' ? (shared[+v] ?? '') : unescapeXml(v);
+      }
+      while (cells.length < ci) cells.push('');
+      cells[ci] = String(val).trim();
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
 function importMasterlistText(text, sourceName){
-  const rows = parseCsv(text);
-  if (rows.length < 2) { toast('Could not read any data rows. Paste/upload CSV with a header row.','bad'); return; }
+  importMasterlistRows(parseCsv(text), sourceName);
+}
+function importMasterlistRows(rows, sourceName){
+  if (!rows || rows.length < 2) { toast('Could not read any data rows. Upload a roster with a header row (CSV or .xlsx).','bad'); return; }
   const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const hdr = rows[0].map(norm);
   const colFor = key => { for (const syn of HDR_SYNONYMS[key]) { const i = hdr.indexOf(syn); if (i>=0) return i; } return -1; };
@@ -1543,15 +1626,15 @@ function renderAdmin(){
       ${master.agents.length?'<button class="btn danger sm" onclick="App.clearMasterlist()">🗑 Clear Roster</button>':''}
     </div>
     <div class="kv" style="border-top:1px solid var(--border);padding-top:12px">
-      <label>📤 Upload Roster CSV Update</label>
-      <button class="btn sm" onclick="App.downloadMlTemplate()">📄 Download Excel Roster Template</button>
+      <label>📤 Upload Roster Update (Excel .xlsx or CSV)</label>
+      <button class="btn sm" onclick="App.downloadMlTemplate()">📄 Download Roster Template</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0 10px">
       <button class="btn sm" onclick="document.getElementById('mlFile').click()">Choose File…</button>
       <span style="font-size:12px;color:var(--muted)" id="mlFileName">No file chosen</span>
-      <input type="file" id="mlFile" accept=".csv,text/csv" style="display:none">
+      <input type="file" id="mlFile" accept=".csv,.xlsx,text/csv" style="display:none">
     </div>
-    <p style="font-size:11px;color:var(--muted)">Expected headers: <code>EmployeeNumber, FullName, Email, ImmediateSupervisor, ImmediateSupervisorEmail, Manager, ManagerEmail, SOM, SOMEmail, CHANNEL, Internal LOB</code> (order flexible; common synonyms accepted).</p>
+    <p style="font-size:11px;color:var(--muted)">Expected headers: <code>EmployeeNumber, FullName, Email, ImmediateSupervisor, ImmediateSupervisorEmail, Manager, ManagerEmail, SOM, SOMEmail, CHANNEL, Internal LOB</code> (order flexible; CHANNEL and Internal LOB are optional — auditors can type them on the form).</p>
     <textarea class="list" id="mlPaste" style="margin-top:10px" placeholder="…or paste CSV rows here (first line = headers) and click Import Pasted."></textarea>
     <div style="margin-top:8px"><button class="btn sm" onclick="App.importPastedMl()">Import Pasted</button></div>
   </div>
@@ -1624,10 +1707,15 @@ function renderAdmin(){
     </div>
   </div>`;
 
-  $('#mlFile').addEventListener('change', e => {
+  $('#mlFile').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
     $('#mlFileName').textContent = f.name;
-    f.text().then(t => importMasterlistText(t, f.name)).catch(err => toast('Read failed: '+err.message,'bad'));
+    try {
+      const buf = await f.arrayBuffer();
+      const isZip = new DataView(buf).getUint16(0, false) === 0x504B; // "PK" = xlsx
+      if (isZip || /\.xlsx$/i.test(f.name)) importMasterlistRows(await parseXlsxRows(buf), f.name);
+      else importMasterlistText(new TextDecoder().decode(buf), f.name);
+    } catch(err) { toast('Import failed: ' + err.message, 'bad'); }
     e.target.value = '';
   });
   $('#restoreFile').addEventListener('change', e => {
