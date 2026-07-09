@@ -163,6 +163,8 @@ lines = [
     "  •  Disputes: the auditor (or Sundeep) edits the audit's row directly; co-authoring shows who's editing.",
     "  •  Admin (Sundeep) maintains the 'Roster' and 'Lists' sheets. 2,000 audit rows are prepared;",
     "     ask the admin to extend the table when you approach the end.",
+    "  •  Channel and Internal LOB come from the Roster: the admin sets each agent's CHANNEL",
+    "     (dropdown on the Roster sheet) and Internal LOB — audits then auto-fill them.",
     "",
     "VERSION HISTORY / BACKUP: SharePoint keeps automatic version history (file > Version History),",
     "so any mistake can be rolled back. No manual backups needed.",
@@ -204,7 +206,8 @@ ROS_HDR = ["EmployeeNumber", "FullName", "Email", "ImmediateSupervisor", "Immedi
            "Manager", "ManagerEmail", "SOM", "SOMEmail", "CHANNEL", "Internal LOB"]
 ros.append(ROS_HDR)
 for a in agents:
-    ros.append(a + ["", ""])            # CHANNEL / Internal LOB left for admin
+    # CHANNEL is admin-maintained (dropdown below); Internal LOB defaults org-wide
+    ros.append(a + ["", "HP Mainstream"])
 n_ros = len(agents) + 1
 for i, w in enumerate([14, 34, 36, 30, 36, 30, 36, 30, 36, 14, 16], start=1):
     ros.column_dimensions[get_column_letter(i)].width = w
@@ -212,6 +215,13 @@ t = Table(displayName="tblRoster", ref=f"A1:K{n_ros}")
 t.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
 ros.add_table(t)
 ros.freeze_panes = "A2"
+# CHANNEL dropdown (suggestions, not enforced) for the admin to fill per agent
+lists["K1"] = "Channels"; lists["K1"].font = Font(bold=True)
+for i, v in enumerate(["Voice", "Chat", "Email", "Back Office"], start=2):
+    lists.cell(row=i, column=11, value=v)
+dv_ch = DataValidation(type="list", formula1="=Lists!$K$2:$K$5", allow_blank=True, showErrorMessage=False)
+ros.add_data_validation(dv_ch)
+dv_ch.add(f"J2:J{n_ros}")
 
 # agent names into Lists!H for the dropdown named range
 for i, a in enumerate(agents, start=2):
@@ -229,7 +239,9 @@ LAST = N_LOG + 1
 # Plain relative references (not [@col] structured refs): identical behaviour in
 # Excel, and verifiable in LibreOffice which mis-parses the [@col] shorthand.
 def LK(col, r):
-    return f'IFERROR(INDEX(Roster!${col}:${col},MATCH($C{r},Roster!$B:$B,0))&"","—")'
+    # empty roster cells must come back as "" (bare INDEX turns them into 0)
+    idx = f'INDEX(Roster!${col}:${col},MATCH($C{r},Roster!$B:$B,0))'
+    return f'IFERROR(IF({idx}="","",{idx}&""),"—")'
 def mail_body(r):
     return (
         f'"Hi "&$F{r}&","&CHAR(10)&"Good day!"&CHAR(10)&CHAR(10)'
