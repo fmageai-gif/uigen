@@ -19,6 +19,7 @@ import re
 from datetime import date
 from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.series import DataPoint
 from openpyxl.formatting.rule import CellIsRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -468,19 +469,35 @@ def build_dashboard(title, calc, qc):
     d["F7"] = "LATEST AUDIT (FILTERED)"; d["F7"].font = f_lbl
     d.merge_cells("F8:H8")
     d["F8"] = f"={C}!$B$11"; d["F8"].font = f_kpi_md
-    # charts
-    cn = calc.title
+    # charts — Excel hides generated axes unless delete=False is explicit,
+    # so every chart switches its axes on and carries data labels.
+    def show_axes(ch, x_fmt=None):
+        ch.x_axis.delete = False
+        ch.y_axis.delete = False
+        ch.x_axis.tickLblPos = "nextTo"
+        ch.y_axis.tickLblPos = "nextTo"
+        if x_fmt:
+            ch.x_axis.number_format = x_fmt
+            ch.x_axis.majorTimeUnit = "days"
+    def value_labels(ch):
+        ch.dLbls = DataLabelList(); ch.dLbls.showVal = True
+        ch.dLbls.showSerName = False; ch.dLbls.showCatName = False; ch.dLbls.showLegendKey = False
+
     trend = LineChart(); trend.title = "Audit Trend (Last 14 Days)"; trend.height = 7.2; trend.width = 15
     data = Reference(calc, min_col=5, min_row=1, max_row=15)
     cats = Reference(calc, min_col=4, min_row=2, max_row=15)
     trend.add_data(data, titles_from_data=True); trend.set_categories(cats)
     trend.series[0].graphicalProperties.line.solidFill = BLUE
     trend.series[0].graphicalProperties.line.width = 22000
+    trend.series[0].smooth = False
     trend.legend = None
+    trend.y_axis.title = "audits"
+    show_axes(trend, x_fmt="mm-dd")
     d.add_chart(trend, "B10")
+
     dough = DoughnutChart(); dough.title = "Valid vs Invalid"; dough.height = 7.2; dough.width = 8.5
+    dough.holeSize = 55
     dd = Reference(calc, min_col=2, min_row=8, max_row=9)
-    dl_start = 8
     dough.add_data(dd)
     labels_ref = Reference(calc, min_col=1, min_row=8, max_row=9)
     calc["A8"], calc["A9"] = "Valid", "Invalid"
@@ -489,15 +506,21 @@ def build_dashboard(title, calc, qc):
     for idx, colr in ((0, GREEN), (1, RED)):
         pt = DataPoint(idx=idx); pt.graphicalProperties.solidFill = colr
         s.data_points.append(pt)
+    dough.dLbls = DataLabelList()
+    dough.dLbls.showVal = True; dough.dLbls.showPercent = True
+    dough.dLbls.showSerName = False; dough.dLbls.showCatName = False; dough.dLbls.showLegendKey = False
     d.add_chart(dough, "H10")
+
     bar1 = BarChart(); bar1.type = "bar"; bar1.title = "Top Defective Case Resolution Codes"
-    bar1.height = 7.5; bar1.width = 15
+    bar1.height = 7.5; bar1.width = 15; bar1.gapWidth = 60
     b1d = Reference(calc, min_col=12, min_row=1, max_row=7)
     b1c = Reference(calc, min_col=11, min_row=2, max_row=7)
     bar1.add_data(b1d, titles_from_data=True); bar1.set_categories(b1c)
     bar1.series[0].graphicalProperties.solidFill = RED
     bar1.legend = None
+    show_axes(bar1); value_labels(bar1)
     d.add_chart(bar1, "B26")
+
     if qc:
         bar2 = BarChart(); bar2.type = "bar"; bar2.title = "Agents with Most Quick Case Defects"
         b2d = Reference(calc, min_col=29, min_row=1, max_row=7)
@@ -506,10 +529,11 @@ def build_dashboard(title, calc, qc):
         bar2 = BarChart(); bar2.type = "bar"; bar2.title = "Audits by Team Leader (Top 5)"
         b2d = Reference(calc, min_col=21, min_row=1, max_row=6)
         b2c = Reference(calc, min_col=20, min_row=2, max_row=6)
-    bar2.height = 7.5; bar2.width = 15
+    bar2.height = 7.5; bar2.width = 15; bar2.gapWidth = 60
     bar2.add_data(b2d, titles_from_data=True); bar2.set_categories(b2c)
     bar2.series[0].graphicalProperties.solidFill = BLUE if not qc else RED
     bar2.legend = None
+    show_axes(bar2); value_labels(bar2)
     d.add_chart(bar2, "H26")
     d.sheet_view.zoomScale = 90
     return d
