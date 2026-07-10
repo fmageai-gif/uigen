@@ -52,6 +52,8 @@ INVALID_REASONS = [
     "Referred - for Hardware Service (ASP / 3rd Party HW / DOA)",
     "Referred - for Software Support (Out of Scope / 3rd Party SW)",
     "Unresolved - Not Entitled for Support",
+    "Subscription Cancellation (SubCan)",
+    "Unresolved - Does Not Agree to Pay (DNAP)",
 ]
 VALID_REASONS = [
     "Remote Solution (HW/SW Resolved Remotely via Troubleshooting)",
@@ -68,6 +70,8 @@ VALID_REASONS = [
     "Cancel Per Customer / No Contact (CPC/NC)",
     "Case Voided (Test Case / Duplicate / Created by Mistake)",
     "Unresolved - Not Entitled for Support",
+    "Subscription Cancellation (SubCan)",
+    "Unresolved - Does Not Agree to Pay (DNAP)",
 ]
 AUDITOR_EMAILS = [
     "sundeep.bhardwaj@concentrix.com", "ivy.serata@concentrix.com",
