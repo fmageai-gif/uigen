@@ -434,17 +434,39 @@ class Player:
 
     def _do_image_click(self, p: dict):
         path = os.path.join(self.image_dir, p.get("image", ""))
-        hit = locate_image(path, p.get("confidence", 0.8))
-        if hit is None:
-            self.on_status(f'Image "{p.get("image")}" not found on screen')
-            return
+        name = p.get("image")
+        conf = p.get("confidence", 0.8)
+        wait = p.get("wait", False)
+        timeout = float(p.get("timeout", 0) or 0)  # seconds; 0 = wait forever
+
+        # Keep scanning until the image appears. With wait=True the routine
+        # does NOT advance to the next step until the image is found & clicked
+        # (or the optional timeout elapses, or ESC/Stop is pressed).
+        start = time.time()
+        hit = None
+        while True:
+            if self._stop.is_set():
+                return
+            hit = locate_image(path, conf)
+            if hit is not None:
+                break
+            if not wait:
+                self.on_status(f'Image "{name}" not found on screen')
+                return
+            if timeout > 0 and (time.time() - start) >= timeout:
+                self.on_status(f'Image "{name}" not found within {timeout:.0f}s — skipping')
+                return
+            waited = int(time.time() - start)
+            self.on_status(f'Waiting for "{name}"… {waited}s (ESC to abort)')
+            self._sleep(400)  # re-scan ~2x/sec, honours Stop
+
         cx, cy, score = hit
         btn = p.get("button", "left")
         if p.get("double"):
             pyautogui.doubleClick(cx, cy)
         else:
             pyautogui.click(cx, cy, button=btn)
-        self.on_status(f'Clicked "{p.get("image")}" ({score:.0%})')
+        self.on_status(f'Clicked "{name}" ({score:.0%}) at {cx},{cy}')
 
     def _do_key(self, keys: str):
         keys = keys.strip()

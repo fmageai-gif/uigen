@@ -111,6 +111,10 @@ class Step:
             btn = p.get("button", "left")
             name = p.get("image", "?")
             conf = p.get("confidence", 0.8)
+            if p.get("wait", False):
+                to = p.get("timeout", 0)
+                limit = f", up to {to}s" if to else ", waits forever"
+                return f'Wait for image "{name}", then {btn} click (match ≥ {conf:.0%}{limit})'
             return f'Find image "{name}" and {btn} click (match ≥ {conf:.0%})'
         if t == KEY:
             return f'Keystroke "{p.get("keys", "")}"'

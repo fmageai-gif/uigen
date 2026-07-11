@@ -23,7 +23,20 @@ a web page). It runs on Windows, macOS and Linux with Python 3.9+.
 | **IF / ELSE / END IF conditions** | Branch on *image found / not found* or *pixel colour matches / not* |
 | **Loops** | `Loops` box in the toolbar (`0` = infinite) |
 | **Save / Open** routines | Stored as JSON; captured images live in `images/` |
-| **Emergency stop** | Press **ESC** any time during playback |
+| **Start / Stop hotkeys** | **Alt+F1** starts playback, **Alt+F2** stops — global, even when another window is focused |
+| **Copy / Paste / Delete steps** | Buttons, or **Ctrl+C** / **Ctrl+V** / **Ctrl+X** / **Delete** on the step list |
+| **Emergency stop** | Press **ESC** (or **Alt+F2**) any time during playback |
+
+### Smart Click: "wait until found"
+
+By default a Smart Click step **waits until its image appears on screen,
+clicks it, and only then advances** to the next step. This is the reliable way
+to automate apps that load at different speeds — the routine pauses on the step
+instead of clicking blindly and missing. You can:
+
+- set a **timeout** (seconds; `0` = wait forever), and
+- turn the wait off (in the Image Click dialog) if you'd rather it try once and
+  move on.
 
 ## Setup
 

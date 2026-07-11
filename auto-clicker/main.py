@@ -54,6 +54,7 @@ class AutoClickerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.steps: list[Step] = []
+        self.clipboard: list[Step] = []
         self.current_file: str | None = None
         self.recorder: engine.Recorder | None = None
         self.player = engine.Player(
@@ -73,6 +74,8 @@ class AutoClickerApp:
         self._build_statusbar()
         self._refresh_tree()
         self._check_deps()
+        self._hotkeys = None
+        self._install_hotkeys()
 
         root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -95,8 +98,8 @@ class AutoClickerApp:
 
         self.record_btn = btn("● Record", self.toggle_record)
         btn("◎ Smart Click", self.add_image_click)
-        self.play_btn = btn("▶ Play", self.play)
-        self.stop_btn = btn("■ Stop", self.stop)
+        self.play_btn = btn("▶ Play (Alt+F1)", self.play)
+        self.stop_btn = btn("■ Stop (Alt+F2)", self.stop)
         self.stop_btn.state(["disabled"])
 
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
@@ -126,6 +129,8 @@ class AutoClickerApp:
         bar3 = ttk.Frame(self.root, padding=(6, 4))
         bar3.pack(side="top", fill="x")
         ttk.Button(bar3, text="Edit", command=self.edit_selected).pack(side="left", padx=1)
+        ttk.Button(bar3, text="Copy", command=self.copy_selected).pack(side="left", padx=1)
+        ttk.Button(bar3, text="Paste", command=self.paste_clipboard).pack(side="left", padx=1)
         ttk.Button(bar3, text="Delete", command=self.delete_selected).pack(side="left", padx=1)
         ttk.Button(bar3, text="▲ Up", command=lambda: self.move_selected(-1)).pack(side="left", padx=1)
         ttk.Button(bar3, text="▼ Down", command=lambda: self.move_selected(1)).pack(side="left", padx=1)
@@ -157,6 +162,10 @@ class AutoClickerApp:
         self.tree.tag_configure("running", background="#fff3b0")
         self.tree.tag_configure("block", foreground="#0057d8")
         self.tree.bind("<Double-1>", lambda e: self.edit_selected())
+        self.tree.bind("<Control-c>", lambda e: self.copy_selected())
+        self.tree.bind("<Control-v>", lambda e: self.paste_clipboard())
+        self.tree.bind("<Control-x>", lambda e: (self.copy_selected(), self.delete_selected()))
+        self.tree.bind("<Delete>", lambda e: self.delete_selected())
 
     def _build_statusbar(self):
         self.status_var = tk.StringVar(value="Ready")
@@ -379,6 +388,23 @@ class AutoClickerApp:
             self._append(Step(actions.IF, dlg.result, delay=0))
 
     # ------------------------------------------------------------------
+    # Global hotkeys: Alt+F1 = Start, Alt+F2 = Stop (work even when the
+    # app is minimised / another window is focused).
+    # ------------------------------------------------------------------
+    def _install_hotkeys(self):
+        if not engine.HAS_PYNPUT:
+            return
+        try:
+            from pynput import keyboard as pk
+            self._hotkeys = pk.GlobalHotKeys({
+                "<alt>+<f1>": lambda: self.root.after(0, self.play),
+                "<alt>+<f2>": lambda: self.root.after(0, self.stop),
+            })
+            self._hotkeys.start()
+        except Exception as e:
+            self.status_var.set(f"Global hotkeys unavailable: {e}")
+
+    # ------------------------------------------------------------------
     # Diagnostic: live cursor position + pixel colour readout
     # ------------------------------------------------------------------
     def toggle_live_coords(self):
@@ -525,6 +551,28 @@ class AutoClickerApp:
         self.steps.insert(idx + 1, self.steps[idx].copy())
         self._refresh_tree(); self.tree.selection_set(str(idx + 1))
 
+    def copy_selected(self):
+        idx = self._selected_index()
+        if idx < 0:
+            return "break"
+        self.clipboard = [self.steps[idx].copy()]
+        self.status_var.set(f"Copied: {self.steps[idx].describe()}")
+        return "break"
+
+    def paste_clipboard(self):
+        if not self.clipboard:
+            self.status_var.set("Clipboard is empty — Copy a step first")
+            return "break"
+        idx = self._selected_index()
+        at = idx + 1 if idx >= 0 else len(self.steps)
+        for offset, step in enumerate(self.clipboard):
+            self.steps.insert(at + offset, step.copy())
+        self._refresh_tree()
+        self.tree.selection_set(str(at))
+        self.tree.see(str(at))
+        self.status_var.set(f"Pasted {len(self.clipboard)} step(s)")
+        return "break"
+
     def move_selected(self, direction: int):
         idx = self._selected_index()
         if idx < 0:
@@ -580,6 +628,11 @@ class AutoClickerApp:
         if self.recorder and self.recorder.recording:
             self.recorder.stop()
         self.player.stop()
+        if self._hotkeys:
+            try:
+                self._hotkeys.stop()
+            except Exception:
+                pass
         self.root.destroy()
 
 
@@ -615,13 +668,34 @@ class ImageClickDialog(tk.Toplevel):
         ttk.Spinbox(self, from_=0.5, to=1.0, increment=0.05, width=8,
                     textvariable=self.conf_var).grid(row=3, column=1, padx=10, pady=4, sticky="w")
 
+        # Wait-until-found: block on this step until the image appears & is clicked.
+        self.wait_var = tk.BooleanVar(value=initial.get("wait", True))
+        ttk.Checkbutton(
+            self, text="Wait until image is found (don't advance until clicked)",
+            variable=self.wait_var, command=self._toggle_timeout).grid(
+            row=4, column=0, columnspan=2, padx=10, pady=(6, 0), sticky="w")
+
+        self.timeout_row = ttk.Frame(self)
+        self.timeout_row.grid(row=5, column=0, columnspan=2, padx=10, sticky="w")
+        ttk.Label(self.timeout_row, text="Give up after (seconds, 0 = wait forever):").pack(side="left")
+        self.timeout_var = tk.IntVar(value=initial.get("timeout", 0))
+        ttk.Spinbox(self.timeout_row, from_=0, to=3600, width=7,
+                    textvariable=self.timeout_var).pack(side="left", padx=6)
+
         self.image_name = image_name
         btns = ttk.Frame(self)
-        btns.grid(row=4, column=0, columnspan=2, pady=10)
+        btns.grid(row=6, column=0, columnspan=2, pady=10)
         ttk.Button(btns, text="OK", command=self._ok).pack(side="left", padx=4)
         ttk.Button(btns, text="Cancel", command=self.destroy).pack(side="left", padx=4)
 
+        self._toggle_timeout()
         self.transient(parent); self.grab_set(); self.wait_window()
+
+    def _toggle_timeout(self):
+        if self.wait_var.get():
+            self.timeout_row.grid()
+        else:
+            self.timeout_row.grid_remove()
 
     def _ok(self):
         self.result = {
@@ -629,6 +703,8 @@ class ImageClickDialog(tk.Toplevel):
             "button": self.button_var.get(),
             "double": self.double_var.get(),
             "confidence": round(float(self.conf_var.get()), 2),
+            "wait": self.wait_var.get(),
+            "timeout": int(self.timeout_var.get() or 0),
         }
         self.destroy()
 
