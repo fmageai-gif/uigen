@@ -409,8 +409,10 @@ class Player:
         try:
             if t == actions.CLICK:
                 pyautogui.click(p["x"], p["y"], button=p.get("button", "left"))
+                self.on_status(f'{p.get("button","left")} click at {p["x"]},{p["y"]}')
             elif t == actions.DOUBLE_CLICK:
                 pyautogui.doubleClick(p["x"], p["y"])
+                self.on_status(f'double click at {p["x"]},{p["y"]}')
             elif t == actions.MOVE:
                 pyautogui.moveTo(p["x"], p["y"])
             elif t == actions.DRAG:

@@ -29,6 +29,27 @@ IMAGE_DIR = os.path.join(APP_DIR, "images")
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
+def enable_dpi_awareness():
+    """
+    Make the process DPI-aware on Windows so that Tkinter (which records click
+    coordinates), mss (which grabs the screen) and pyautogui (which sends the
+    clicks) all agree on *physical* pixels. Without this, any display scaling
+    other than 100% makes recorded clicks land in the wrong place — the #1
+    reason clicks "do nothing" on a scaled monitor.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        try:
+            # PER_MONITOR_AWARE_V2 (best) — Windows 8.1+
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()  # older fallback
+    except Exception:
+        pass
+
+
 class AutoClickerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -110,6 +131,10 @@ class AutoClickerApp:
         ttk.Button(bar3, text="▼ Down", command=lambda: self.move_selected(1)).pack(side="left", padx=1)
         ttk.Button(bar3, text="Duplicate", command=self.duplicate_selected).pack(side="left", padx=1)
         ttk.Button(bar3, text="Set Delay", command=self.set_delay_selected).pack(side="left", padx=1)
+        ttk.Separator(bar3, orient="vertical").pack(side="left", fill="y", padx=6)
+        self._coords_on = False
+        self.coords_btn = ttk.Button(bar3, text="Live Coords", command=self.toggle_live_coords)
+        self.coords_btn.pack(side="left", padx=1)
 
     def _build_tree(self):
         frame = ttk.Frame(self.root)
@@ -352,6 +377,34 @@ class AutoClickerApp:
         dlg = ConditionDialog(self.root, IMAGE_DIR)
         if dlg.result:
             self._append(Step(actions.IF, dlg.result, delay=0))
+
+    # ------------------------------------------------------------------
+    # Diagnostic: live cursor position + pixel colour readout
+    # ------------------------------------------------------------------
+    def toggle_live_coords(self):
+        self._coords_on = not self._coords_on
+        self.coords_btn.configure(text="Stop Coords" if self._coords_on else "Live Coords")
+        if self._coords_on:
+            self._poll_coords()
+        else:
+            self.status_var.set("Ready")
+
+    def _poll_coords(self):
+        if not self._coords_on:
+            return
+        try:
+            import pyautogui
+            x, y = pyautogui.position()
+            try:
+                r, g, b = engine.pixel_color(x, y)
+                col = f"  colour #{r:02x}{g:02x}{b:02x}"
+            except Exception:
+                col = ""
+            self.status_var.set(f"Cursor X:{x}  Y:{y}{col}   "
+                                f"(hover your target; these are the numbers to click)")
+        except Exception as e:
+            self.status_var.set(f"Live coords unavailable: {e}")
+        self.root.after(100, self._poll_coords)
 
     # ------------------------------------------------------------------
     # Position picker: user clicks anywhere on screen to capture coords
@@ -704,6 +757,7 @@ class ConditionDialog(tk.Toplevel):
 
 
 def main():
+    enable_dpi_awareness()
     root = tk.Tk()
     try:
         ttk.Style().theme_use("clam")
