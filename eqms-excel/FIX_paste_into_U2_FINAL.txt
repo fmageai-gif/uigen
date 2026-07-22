@@ -1,0 +1,1 @@
+=IF($O2="Invalid",HYPERLINK("mailto:"&$G2&";"&$I2&"?cc="&Lists!$E$2&"&subject="&SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE("[INVALID] Quality Audit - "&$C2&" - Case "&$M2,"%","%25"),"&","%26"),"#","%23"),"?","%3F")," ","%20"),"✉ Email TL/OM"),"")
