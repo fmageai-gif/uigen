@@ -34,6 +34,9 @@
   "opportunities_text": "N/A",
   "time_of_day": "12:00 AM",
 
+  "_selection_criteria_comment": "The options this required field actually offers. Rows whose column S matches none of them cannot be filled in, so they are reported and skipped. Empty this list to turn the check off.",
+  "selection_criteria_options": ["Remote Solution", "Case Voided", "Quick Case"],
+
   "_choice_map_comment": "Excel value -> exact SharePoint dropdown option. Filled in after running --inspect. An empty map means 'use the Excel value as-is'.",
   "choice_map": {
     "LOB": {},

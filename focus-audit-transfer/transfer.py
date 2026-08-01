@@ -189,6 +189,27 @@ def select_rows(cfg: dict[str, Any], rows: list[Row], args: argparse.Namespace) 
     return picked[: args.limit] if args.limit else picked
 
 
+def partition_rows(cfg: dict[str, Any], rows: list[Row]) -> tuple[list[Row], list[Row]]:
+    """Split off rows that cannot be filled in, rather than failing on them mid-run.
+
+    Call/Chat Selection Criteria is a required field offering only a few options.
+    Column S carries resolution codes that do not all have a counterpart there -
+    Subscription Cancellation being the common one - and such a row can never be
+    saved, so it is reported up front instead of stopping the run later.
+    """
+    options = cfg.get("selection_criteria_options") or []
+    if not options:
+        return rows, []
+
+    mapping = cfg.get("choice_map", {}).get("Call/Chat Selection Criteria", {})
+    keep: list[Row] = []
+    skip: list[Row] = []
+    for row in rows:
+        value = mapping.get(row.expected_resolution, row.expected_resolution).strip()
+        (keep if _best_option(value, options) else skip).append(row)
+    return keep, skip
+
+
 def load_submitted() -> list[str]:
     if not SUBMITTED_LOG.exists():
         return []
@@ -644,6 +665,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--force", action="store_true",
                    help="include rows already recorded as submitted")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    p.add_argument("--include-unmatched", action="store_true",
+                   help="attempt rows whose Selection Criteria has no matching option, "
+                        "pausing so you can pick one, instead of skipping them")
     return p.parse_args()
 
 
@@ -665,8 +689,19 @@ def main() -> int:
             workbook = resolve_workbook(cfg, page)
             rows = select_rows(cfg, read_rows(cfg, workbook), args)
 
+            skipped: list[Row] = []
+            if not args.include_unmatched:
+                rows, skipped = partition_rows(cfg, rows)
+
+            if skipped:
+                log(f"\n{len(skipped)} row(s) will be SKIPPED - column S has no "
+                    f"matching Call/Chat Selection Criteria option:")
+                for r in skipped:
+                    log(f"  {r.audit_id}  {r.case_number}  {r.expected_resolution!r}")
+                log("  (run with --include-unmatched to enter these by hand instead)")
+
             if not rows:
-                log("Nothing to submit.")
+                log("\nNothing left to submit.")
                 return 0
 
             log(f"\n{len(rows)} row(s) queued:")

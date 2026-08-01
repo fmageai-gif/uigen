@@ -47,6 +47,7 @@ Until that's done, values that don't match an option will pause and ask you.
 | `run.bat --limit 5` | Stop after 5 rows |
 | `run.bat --all` | Ignore dates entirely |
 | `run.bat --force` | Re-submit rows already recorded as done |
+| `run.bat --include-unmatched` | Also attempt the skipped rows, pausing so you pick the criteria |
 
 **Run `--dry-run` first.** Check every field on that one entry before letting it
 loose on a full day.
@@ -60,8 +61,16 @@ loose on a full day.
 2. Column **B** (`auditDate`) must fall in the date window (last 7 days by default).
 3. Anything whose `auditId` is already in `submitted.json` is skipped.
 
+4. Rows whose column S has no matching **Call/Chat Selection Criteria** option
+   are set aside. That field is required and only offers `Remote Solution`,
+   `Case Voided` and `Quick Case`, so a `Subscription Cancellation (SubCan)`
+   row could never be saved. Those rows are listed before anything is
+   submitted, so you always see what is being left out.
+
 `submitted.json` is what stops double-entry. Don't delete it. It is written
 only after a save actually succeeds, so a failed row will be retried next run.
+Skipped rows are never recorded as submitted, so they reappear if the option
+list later gains a match.
 
 Nothing is ever written back to ADHOC.xlsx. The workbook is co-authored by the
 team, so the script only ever reads it.
