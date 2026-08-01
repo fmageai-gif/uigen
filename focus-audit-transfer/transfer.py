@@ -215,40 +215,45 @@ class FormError(RuntimeError):
 
 @dataclass
 class Form:
-    """Thin wrapper over the modern SharePoint 'New item' panel."""
+    """Thin wrapper over the modern SharePoint 'New item' panel.
+
+    Locators are built around one observation from the live form: every field's
+    accessible name *starts with* the field title and then adds boilerplate, e.g.
+
+        "CaseID Required Field, empty, field editor. "
+        "Call Listening Date, Tab to navigate through the date time callout, ..."
+
+    So a starts-with match on aria-label pins the right control whatever its type.
+    The HTML ids are no help - both date fields share one id, and the text fields
+    use React counters (TextField19, TextField22, ...) that shift as the form changes.
+    """
 
     page: Page
     choice_map: dict[str, dict[str, str]] = field(default_factory=dict)
 
     # -- locating ---------------------------------------------------------- #
 
-    def _control(self, label: str, roles: tuple[str, ...]):
-        """Find a control by its field label, trying the ways SharePoint exposes it.
+    def _control(self, label: str, roles: tuple[str, ...] = ()):
+        for selector in (f'[aria-label^="{label}"]:visible', f'[aria-label^="{label}"]'):
+            candidate = self.page.locator(selector)
+            if candidate.count():
+                return candidate.first
 
-        SharePoint renders these forms differently depending on field type and
-        tenant version, so this walks from the most reliable signal (an accessible
-        name) down to positional guessing off the visible label text.
-        """
         for role in roles:
-            for exact in (True, False):
-                candidate = self.page.get_by_role(role, name=label, exact=exact)
-                if candidate.count():
-                    return candidate.first
-
-        for exact in (True, False):
-            candidate = self.page.get_by_label(label, exact=exact)
+            candidate = self.page.get_by_role(role, name=label, exact=False)
             if candidate.count():
                 return candidate.first
 
-        # Last resort: the first control appearing after the visible label text.
+        candidate = self.page.get_by_label(label, exact=False)
+        if candidate.count():
+            return candidate.first
+
         quoted = _xpath_literal(label)
-        control = "self::input or self::textarea or @role='combobox' or @role='listbox'"
-        for axis in (f"following::*[{control}][1]",
-                     f"ancestor::div[position()<=4]//*[{control}]"):
-            candidate = self.page.locator(
-                f"xpath=//*[normalize-space(text())={quoted}]/{axis}")
-            if candidate.count():
-                return candidate.first
+        control = "self::input or self::textarea or @role='combobox'"
+        candidate = self.page.locator(
+            f"xpath=//*[normalize-space(text())={quoted}]/following::*[{control}][1]")
+        if candidate.count():
+            return candidate.first
 
         raise FormError(f"Could not find the '{label}' field on the form")
 
@@ -260,97 +265,120 @@ class Form:
         control.fill(value)
 
     def set_date(self, label: str, value: str, time_of_day: str) -> None:
-        control = self._control(label, ("textbox", "combobox"))
+        """Fill a SharePoint date+time field and confirm the time came out right.
+
+        The control is a single combined text field that displays "8/1/2026 12:00 AM",
+        so the date and time are typed together and the callout is closed with Enter.
+        The time defaults to 12:00 AM, but it is verified rather than assumed.
+        """
+        control = self._control(label, ("combobox", "textbox"))
+        control.click()
+        control.fill(f"{value} {time_of_day}")
+        control.press("Enter")
+        self.page.wait_for_timeout(400)
+
+        landed = (control.input_value() or "").strip()
+        if _same_time(landed, time_of_day) and value.lstrip("0") in landed.replace(" 0", " "):
+            log(f"    {label}: {landed}")
+            return
+
+        # Typing them together was rejected - fall back to date only, then the
+        # time control inside the open callout.
         control.click()
         control.fill(value)
+        self._set_time_in_callout(time_of_day)
         control.press("Enter")
-        self._set_time_beside(label, time_of_day)
+        self.page.wait_for_timeout(400)
 
-    def _time_combo(self, label: str):
-        """The time dropdown belonging to one specific date field, or None.
+        landed = (control.input_value() or "").strip()
+        log(f"    {label}: {landed}")
+        if not _same_time(landed, time_of_day):
+            raise FormError(
+                f"{label} ended up as '{landed}' - expected the time to be {time_of_day}")
 
-        Both date fields have their own time dropdown, so this must never fall
-        back to "the first time combobox on the page" - picking the wrong one
-        would set the time on the other date field.
-        """
-        # Matched in Python rather than via a regex selector: field labels contain
-        # "/" (e.g. "Call/Chat Date"), which Playwright's selector parser rejects.
-        combos = self.page.locator("[role='combobox']")
-        wanted = label.lower()
-        for i in range(combos.count()):
-            combo = combos.nth(i)
-            name = (combo.get_attribute("aria-label") or "").lower()
-            if "time" in name and wanted in name:
-                return combo
-
-        # Otherwise take the next combobox after this date input, but only if its
-        # accessible name actually mentions time.
-        quoted = _xpath_literal(label)
-        near = self.page.locator(
-            f"xpath=//*[normalize-space(text())={quoted}]/following::*[@role='combobox'][1]")
-        if near.count():
-            name = (near.first.get_attribute("aria-label") or "")
-            if "time" in name.lower():
-                return near.first
-        return None
-
-    def _set_time_beside(self, label: str, time_of_day: str) -> None:
-        """Date fields with time enabled render a separate time dropdown next to the date box."""
-        combo = self._time_combo(label)
-        if combo is None:
-            log(f"    {label}: no time dropdown found - date only")
+    def _set_time_in_callout(self, time_of_day: str) -> None:
+        """Set the time inside the open date callout, without touching the date box."""
+        candidates = self.page.locator(
+            "[class*='TimePicker'] input:visible, [class*='timePicker'] input:visible, "
+            "[class*='TimePicker'] [role='combobox']:visible")
+        if not candidates.count():
             return
+        control = candidates.first
         try:
-            combo.click()
+            control.click()
             option = self.page.get_by_role("option", name=time_of_day, exact=False)
             if option.count():
                 option.first.click()
-                log(f"    {label}: time set to {time_of_day}")
             else:
-                combo.press("Escape")
-                log(f"    ! '{time_of_day}' not offered for {label} - left as-is")
+                control.fill(time_of_day)
         except PWTimeout:
-            log(f"    ! timed out setting the time for {label}")
+            log(f"    ! could not set the time to {time_of_day}")
 
     def set_person(self, label: str, email: str) -> None:
-        control = self._control(label, ("textbox", "combobox", "searchbox"))
+        control = self._control(label, ("combobox", "textbox"))
         control.click()
         control.fill(email)
-        # The picker needs a moment to resolve the address against the directory.
-        # Restricted to visible matches: the form has other, closed listboxes in
-        # the DOM, and a plain CSS match would latch onto one of those instead.
+
+        # Only visible suggestions count: the form keeps other, closed listboxes in
+        # the DOM. "Search Directory" is an action at the foot of the list, not a person.
         suggestion = self.page.locator(
-            ".ms-Suggestions-item:visible, "
-            "[class*='peoplePicker'] [role='option']:visible, "
-            "[role='listbox'] [role='option']:visible")
+            ".ms-Suggestions-item:visible, [class*='peoplePicker'] [role='option']:visible, "
+            "[role='listbox'] [role='option']:visible, [class*='suggestionItem']:visible")
         try:
-            suggestion.first.wait_for(state="visible", timeout=12_000)
-            suggestion.first.click()
-            log(f"    {label}: matched {email}")
+            suggestion.first.wait_for(state="visible", timeout=15_000)
         except PWTimeout:
             raise FormError(f"No directory match appeared for {email}")
 
+        texts = suggestion.all_inner_texts()
+        pick = 0
+        for i, text in enumerate(texts):
+            if "search directory" in text.strip().lower():
+                continue
+            pick = i
+            break
+        else:
+            raise FormError(f"Only 'Search Directory' was offered for {email}")
+
+        suggestion.nth(pick).click()
+        self.page.wait_for_timeout(300)
+        if not self._person_pill_present():
+            raise FormError(f"Picked a suggestion for {email} but no name pill appeared")
+        log(f"    {label}: {texts[pick].splitlines()[0].strip()}")
+
+    def _person_pill_present(self) -> bool:
+        pill = self.page.locator(
+            "[class*='personaPill']:visible, [class*='pickerItem']:visible, "
+            "[class*='ms-PickerPersona']:visible, [class*='personDisplayPill']:visible")
+        return bool(pill.count())
+
     def set_choice(self, label: str, value: str, interactive: bool) -> None:
+        """Pick an option from one of the filter-style choice dropdowns."""
         wanted = self.choice_map.get(label, {}).get(value, value).strip()
         control = self._control(label, ("combobox", "button"))
         control.click()
 
         options = self.page.get_by_role("option")
         try:
-            options.first.wait_for(state="visible", timeout=8_000)
+            options.first.wait_for(state="visible", timeout=10_000)
         except PWTimeout:
+            self.page.keyboard.press("Escape")
             raise FormError(f"The '{label}' dropdown did not open")
 
         texts = [t.strip() for t in options.all_inner_texts()]
         match = _best_option(wanted, texts)
         if match is None:
-            control.press("Escape")
+            # Escape must go to the page: clicking the field swaps the element out,
+            # so pressing a key on the original locator would fail.
+            self.page.keyboard.press("Escape")
             self._resolve_manually(label, value, wanted, texts, interactive)
             return
 
         options.nth(texts.index(match)).click()
+        self.page.wait_for_timeout(200)
         if match != wanted:
             log(f"    {label}: '{value}' -> '{match}'")
+        else:
+            log(f"    {label}: {match}")
 
     def _resolve_manually(self, label: str, excel_value: str, wanted: str,
                           options: list[str], interactive: bool) -> None:
@@ -370,6 +398,11 @@ class Form:
         self.page.wait_for_timeout(2500)
 
 
+def _same_time(landed: str, time_of_day: str) -> bool:
+    squash = lambda s: re.sub(r"\s+", "", s).lower()
+    return squash(time_of_day) in squash(landed)
+
+
 def _xpath_literal(text: str) -> str:
     """Quote a string for XPath 1.0, which has no escape syntax of its own."""
     if "'" not in text:
@@ -381,22 +414,64 @@ def _xpath_literal(text: str) -> str:
 
 
 def _best_option(wanted: str, options: list[str]) -> str | None:
-    """Exact, then case-insensitive, then unambiguous prefix match."""
+    """Match an Excel value to a dropdown option.
+
+    The two sides are worded differently in both directions: Excel's
+    "Remote Solution (HW/SW Resolved Remotely via Phone/Chat)" has to reach the
+    option "Remote Solution", while a stripped "Subscription Cancellation" has to
+    reach "Subscription Cancellation (SubCan)". Exact matches always win first, so
+    "Instant Ink" can never be dragged onto "Instant Ink Chat".
+    """
+    if not wanted:
+        return None
     if wanted in options:
         return wanted
+
     lowered = wanted.lower()
     for opt in options:
         if opt.lower() == lowered:
             return opt
-    starts = [o for o in options if o.lower().startswith(lowered[:25])]
-    return starts[0] if len(starts) == 1 else None
+
+    # Option is the shorter, more general form of the Excel value.
+    contained = [o for o in options if o and lowered.startswith(o.lower())]
+    if contained:
+        return max(contained, key=len)
+
+    # Excel value is the shorter form; only accept it when it is unambiguous.
+    expands = [o for o in options if o.lower().startswith(lowered)]
+    return expands[0] if len(expands) == 1 else None
 
 
 def open_new_item(page: Page, cfg: dict[str, Any]) -> Form:
+    """Open the New item panel, trying the command bar then the direct form URL."""
     page.goto(cfg["list_url"], wait_until="domcontentloaded")
-    page.get_by_role("button", name=cfg["new_item_button"], exact=False).first.click()
-    page.get_by_text("New item", exact=False).first.wait_for(state="visible", timeout=20_000)
-    return Form(page=page, choice_map=cfg.get("choice_map", {}))
+    page.wait_for_timeout(2500)
+
+    attempts = (
+        lambda: page.get_by_role("menuitem", name=cfg["new_item_button"], exact=False).first.click(timeout=8_000),
+        lambda: page.locator("[data-automationid='newCommand']").first.click(timeout=8_000),
+        lambda: page.get_by_role("button", name=cfg["new_item_button"], exact=False).first.click(timeout=8_000),
+        lambda: page.locator("button:has-text('New'), a:has-text('New')").first.click(timeout=8_000),
+    )
+    for attempt in attempts:
+        try:
+            attempt()
+            page.get_by_text("New item", exact=False).first.wait_for(state="visible", timeout=10_000)
+            return Form(page=page, choice_map=cfg.get("choice_map", {}))
+        except (PWTimeout, Exception):
+            continue
+
+    # Last resort: the list's own new-item form URL.
+    new_form = cfg.get("new_form_url", "").strip()
+    if new_form:
+        page.goto(new_form, wait_until="domcontentloaded")
+        try:
+            page.get_by_text("New item", exact=False).first.wait_for(state="visible", timeout=20_000)
+            return Form(page=page, choice_map=cfg.get("choice_map", {}))
+        except PWTimeout:
+            pass
+
+    raise FormError("Could not open the New item panel")
 
 
 def fill_row(form: Form, row: Row, cfg: dict[str, Any], interactive: bool) -> None:
@@ -431,9 +506,8 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
     except Exception as exc:
         schema["open_error"] = str(exc)
         log(f"! Could not open the New item form: {exc}")
-        log("  Capturing the page anyway - open the form by hand if you can.")
-        snap(page, "inspect-open-failed")
-        input("  Press Enter once the New item panel is showing (or to give up)... ")
+        log("  Open it by hand in the browser window - click New on the list.")
+        input("  Press Enter once the New item panel is showing... ")
 
     controls = page.locator("input, textarea, [role='combobox'], [role='button'][aria-haspopup]")
     for i in range(controls.count()):
@@ -453,17 +527,51 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
 
     schema["choices"] = {}
     for label in CHOICE_FIELDS:
+        captured: Any = {"error": "not reached"}
         try:
             form = Form(page=page)
             control = form._control(label, ("combobox", "button"))
             control.click()
-            page.get_by_role("option").first.wait_for(state="visible", timeout=8_000)
-            schema["choices"][label] = [t.strip() for t in page.get_by_role("option").all_inner_texts()]
-            control.press("Escape")
-            log(f"  {label}: {len(schema['choices'][label])} options")
+            page.get_by_role("option").first.wait_for(state="visible", timeout=10_000)
+            # Store before closing: tidying up must never lose what was captured.
+            captured = [t.strip() for t in page.get_by_role("option").all_inner_texts()]
+            log(f"  {label}: {len(captured)} options")
         except Exception as exc:
-            schema["choices"][label] = {"error": str(exc)}
-            log(f"  ! {label}: {exc}")
+            captured = {"error": str(exc)}
+            log(f"  ! {label}: {str(exc).splitlines()[0]}")
+        finally:
+            schema["choices"][label] = captured
+            try:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(400)
+            except Exception:
+                pass
+
+    schema["date_callout"] = {}
+    for label in DATE_FIELDS:
+        try:
+            form = Form(page=page)
+            control = form._control(label, ("combobox", "textbox"))
+            control.click()
+            page.wait_for_timeout(800)
+            inner = page.locator("[class*='Callout']:visible input, [class*='callout']:visible input, "
+                                 "[class*='TimePicker']:visible, [class*='timePicker']:visible")
+            schema["date_callout"][label] = [{
+                "tag": inner.nth(j).evaluate("e => e.tagName.toLowerCase()"),
+                "aria_label": inner.nth(j).get_attribute("aria-label"),
+                "id": inner.nth(j).get_attribute("id"),
+                "value": inner.nth(j).get_attribute("value"),
+                "class": (inner.nth(j).get_attribute("class") or "")[:120],
+            } for j in range(min(inner.count(), 12))]
+            log(f"  {label} callout: {len(schema['date_callout'][label])} controls")
+        except Exception as exc:
+            schema["date_callout"][label] = {"error": str(exc)}
+        finally:
+            try:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(300)
+            except Exception:
+                pass
 
     schema["labels_on_page"] = sorted({
         t.strip() for t in page.locator("label, [role='heading'], .ms-Label").all_inner_texts()
@@ -474,7 +582,6 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
     snap(page, "inspect-final")
     log(f"\nWrote {SCHEMA_OUT.name} - send this file back to finish the mapping.")
     log(f"Also send the newest screenshots/*.png if anything looked wrong.")
-
 
 # --------------------------------------------------------------------------- #
 # Excel retrieval
