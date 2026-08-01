@@ -34,8 +34,26 @@
   "opportunities_text": "N/A",
   "time_of_day": "12:00 AM",
 
-  "_selection_criteria_comment": "The options this required field actually offers. Rows whose column S matches none of them cannot be filled in, so they are reported and skipped. Empty this list to turn the check off.",
-  "selection_criteria_options": ["Remote Solution", "Case Voided", "Quick Case"],
+  "_required_choice_comment": "Options each required dropdown actually offers. A row whose value matches none of them can never be saved, so it is reported and skipped before the run starts. Empty a list to turn that field's check off.",
+  "required_choice_options": {
+    "Call/Chat Selection Criteria": ["Remote Solution", "Case Voided", "Quick Case"],
+    "Suggested Resolution Code": [
+      "NA",
+      "Case Voided",
+      "No Support Provided",
+      "Cancel Per Customer/No Contact",
+      "Non-Tech Solution",
+      "Remote Solution",
+      "Offsite Solution",
+      "Onsite Solution",
+      "Parts Shipped",
+      "Referred - for hardware service",
+      "Referred - for software support",
+      "Unresolved - Does Not Agree to Pay",
+      "Subscription Cancellation",
+      "Irrelevant"
+    ]
+  },
 
   "_choice_map_comment": "Excel value -> exact SharePoint dropdown option. Filled in after running --inspect. An empty map means 'use the Excel value as-is'.",
   "choice_map": {

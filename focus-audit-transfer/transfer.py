@@ -191,24 +191,40 @@ def select_rows(cfg: dict[str, Any], rows: list[Row], args: argparse.Namespace) 
     return picked[: args.limit] if args.limit else picked
 
 
-def partition_rows(cfg: dict[str, Any], rows: list[Row]) -> tuple[list[Row], list[Row]]:
+def _row_choice_value(row: Row, label: str) -> str:
+    return {
+        "Call/Chat Selection Criteria": row.expected_resolution,
+        "Suggested Resolution Code": row.suggested_resolution_code,
+        "LOB": row.lob,
+        "Validation": row.validation,
+    }.get(label, "")
+
+
+def partition_rows(cfg: dict[str, Any], rows: list[Row]) -> tuple[list[Row], list[tuple[Row, str, str]]]:
     """Split off rows that cannot be filled in, rather than failing on them mid-run.
 
-    Call/Chat Selection Criteria is a required field offering only a few options.
-    Column S carries resolution codes that do not all have a counterpart there -
-    Subscription Cancellation being the common one - and such a row can never be
-    saved, so it is reported up front instead of stopping the run later.
+    Both Call/Chat Selection Criteria and Suggested Resolution Code are required
+    and offer a fixed set of options that the workbook's resolution codes do not
+    fully cover. A row with no match can never be saved, so it is identified up
+    front and reported with the field and value that could not be placed.
     """
-    options = cfg.get("selection_criteria_options") or []
-    if not options:
+    required = cfg.get("required_choice_options") or {}
+    if not required:
         return rows, []
 
-    mapping = cfg.get("choice_map", {}).get("Call/Chat Selection Criteria", {})
     keep: list[Row] = []
-    skip: list[Row] = []
+    skip: list[tuple[Row, str, str]] = []
     for row in rows:
-        value = mapping.get(row.expected_resolution, row.expected_resolution).strip()
-        (keep if _best_option(value, options) else skip).append(row)
+        for label, options in required.items():
+            if not options:
+                continue
+            raw = _row_choice_value(row, label)
+            value = cfg.get("choice_map", {}).get(label, {}).get(raw, raw).strip()
+            if not _best_option(value, options):
+                skip.append((row, label, raw))
+                break
+        else:
+            keep.append(row)
     return keep, skip
 
 
@@ -715,15 +731,15 @@ def main() -> int:
             workbook = resolve_workbook(cfg, page)
             rows = select_rows(cfg, read_rows(cfg, workbook), args)
 
-            skipped: list[Row] = []
+            skipped: list[tuple[Row, str, str]] = []
             if not args.include_unmatched:
                 rows, skipped = partition_rows(cfg, rows)
 
             if skipped:
-                log(f"\n{len(skipped)} row(s) will be SKIPPED - column S has no "
-                    f"matching Call/Chat Selection Criteria option:")
-                for r in skipped:
-                    log(f"  {r.audit_id}  {r.case_number}  {r.expected_resolution!r}")
+                log(f"\n{len(skipped)} row(s) will be SKIPPED - no matching option "
+                    f"for a required dropdown:")
+                for r, label, value in skipped:
+                    log(f"  {r.audit_id}  {r.case_number}  {label} <- {value!r}")
                 log("  (run with --include-unmatched to enter these by hand instead)")
 
             if not rows:
