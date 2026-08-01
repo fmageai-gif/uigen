@@ -32,6 +32,7 @@ PROFILE_DIR = HERE / ".browser-profile"
 SUBMITTED_LOG = HERE / "submitted.json"
 SCHEMA_OUT = HERE / "form_schema.json"
 RUN_LOG = HERE / "last_run.log"
+SHOTS = HERE / "screenshots"
 
 # Form field label -> how we fill it. Labels must match the SharePoint form exactly.
 TEXT_FIELDS = ("CaseID", "Call/Chat ID", "Case Subject", "What are the Opportunities", "Comments/Summary")
@@ -65,6 +66,18 @@ def log(msg: str) -> None:
 
 def flush_log() -> None:
     RUN_LOG.write_text("\n".join(_log_lines), encoding="utf-8")
+
+
+def snap(page: Page, name: str) -> None:
+    """Save a screenshot plus the page HTML, so a failure can be diagnosed later."""
+    try:
+        SHOTS.mkdir(exist_ok=True)
+        stamp = f"{datetime.now():%Y%m%d-%H%M%S}-{name}"
+        page.screenshot(path=str(SHOTS / f"{stamp}.png"), full_page=True)
+        (SHOTS / f"{stamp}.html").write_text(page.content(), encoding="utf-8")
+        log(f"    saved screenshots/{stamp}.png")
+    except Exception as exc:
+        log(f"    (could not capture screenshot: {exc})")
 
 
 # --------------------------------------------------------------------------- #
@@ -210,22 +223,33 @@ class Form:
     # -- locating ---------------------------------------------------------- #
 
     def _control(self, label: str, roles: tuple[str, ...]):
-        """Find a control by its field label, trying the ways SharePoint exposes it."""
+        """Find a control by its field label, trying the ways SharePoint exposes it.
+
+        SharePoint renders these forms differently depending on field type and
+        tenant version, so this walks from the most reliable signal (an accessible
+        name) down to positional guessing off the visible label text.
+        """
         for role in roles:
-            candidate = self.page.get_by_role(role, name=label, exact=False)
+            for exact in (True, False):
+                candidate = self.page.get_by_role(role, name=label, exact=exact)
+                if candidate.count():
+                    return candidate.first
+
+        for exact in (True, False):
+            candidate = self.page.get_by_label(label, exact=exact)
             if candidate.count():
                 return candidate.first
-        candidate = self.page.get_by_label(label, exact=False)
-        if candidate.count():
-            return candidate.first
-        # Fall back to the input nearest the visible label text.
-        xpath = (
-            f"xpath=//*[normalize-space(text())={label!r}]"
-            f"/ancestor::*[self::div][1]//*[self::input or self::textarea or @role='combobox']"
-        )
-        candidate = self.page.locator(xpath)
-        if candidate.count():
-            return candidate.first
+
+        # Last resort: the first control appearing after the visible label text.
+        quoted = _xpath_literal(label)
+        control = "self::input or self::textarea or @role='combobox' or @role='listbox'"
+        for axis in (f"following::*[{control}][1]",
+                     f"ancestor::div[position()<=4]//*[{control}]"):
+            candidate = self.page.locator(
+                f"xpath=//*[normalize-space(text())={quoted}]/{axis}")
+            if candidate.count():
+                return candidate.first
+
         raise FormError(f"Could not find the '{label}' field on the form")
 
     # -- filling ----------------------------------------------------------- #
@@ -242,12 +266,40 @@ class Form:
         control.press("Enter")
         self._set_time_beside(label, time_of_day)
 
+    def _time_combo(self, label: str):
+        """The time dropdown belonging to one specific date field, or None.
+
+        Both date fields have their own time dropdown, so this must never fall
+        back to "the first time combobox on the page" - picking the wrong one
+        would set the time on the other date field.
+        """
+        # Matched in Python rather than via a regex selector: field labels contain
+        # "/" (e.g. "Call/Chat Date"), which Playwright's selector parser rejects.
+        combos = self.page.locator("[role='combobox']")
+        wanted = label.lower()
+        for i in range(combos.count()):
+            combo = combos.nth(i)
+            name = (combo.get_attribute("aria-label") or "").lower()
+            if "time" in name and wanted in name:
+                return combo
+
+        # Otherwise take the next combobox after this date input, but only if its
+        # accessible name actually mentions time.
+        quoted = _xpath_literal(label)
+        near = self.page.locator(
+            f"xpath=//*[normalize-space(text())={quoted}]/following::*[@role='combobox'][1]")
+        if near.count():
+            name = (near.first.get_attribute("aria-label") or "")
+            if "time" in name.lower():
+                return near.first
+        return None
+
     def _set_time_beside(self, label: str, time_of_day: str) -> None:
         """Date fields with time enabled render a separate time dropdown next to the date box."""
-        combos = self.page.get_by_role("combobox", name=re.compile("time", re.IGNORECASE))
-        if not combos.count():
+        combo = self._time_combo(label)
+        if combo is None:
+            log(f"    {label}: no time dropdown found - date only")
             return
-        combo = combos.first
         try:
             combo.click()
             option = self.page.get_by_role("option", name=time_of_day, exact=False)
@@ -265,7 +317,12 @@ class Form:
         control.click()
         control.fill(email)
         # The picker needs a moment to resolve the address against the directory.
-        suggestion = self.page.locator("[role='listbox'] [role='option'], .ms-Suggestions-item")
+        # Restricted to visible matches: the form has other, closed listboxes in
+        # the DOM, and a plain CSS match would latch onto one of those instead.
+        suggestion = self.page.locator(
+            ".ms-Suggestions-item:visible, "
+            "[class*='peoplePicker'] [role='option']:visible, "
+            "[role='listbox'] [role='option']:visible")
         try:
             suggestion.first.wait_for(state="visible", timeout=12_000)
             suggestion.first.click()
@@ -313,6 +370,16 @@ class Form:
         self.page.wait_for_timeout(2500)
 
 
+def _xpath_literal(text: str) -> str:
+    """Quote a string for XPath 1.0, which has no escape syntax of its own."""
+    if "'" not in text:
+        return f"'{text}'"
+    if '"' not in text:
+        return f'"{text}"'
+    parts = "', \"'\", '".join(text.split("'"))
+    return f"concat('{parts}')"
+
+
 def _best_option(wanted: str, options: list[str]) -> str | None:
     """Exact, then case-insensitive, then unambiguous prefix match."""
     if wanted in options:
@@ -353,9 +420,20 @@ def fill_row(form: Form, row: Row, cfg: dict[str, Any], interactive: bool) -> No
 # --------------------------------------------------------------------------- #
 
 def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
-    """Dump every field and every dropdown option so the mapping can be finalised."""
-    open_new_item(page, cfg)
+    """Dump every field and every dropdown option so the mapping can be finalised.
+
+    This is the step that unblocks everything else, so it never gives up: if the
+    form cannot even be opened it still writes whatever it saw, plus screenshots.
+    """
     schema: dict[str, Any] = {"captured_at": datetime.now().isoformat(), "fields": []}
+    try:
+        open_new_item(page, cfg)
+    except Exception as exc:
+        schema["open_error"] = str(exc)
+        log(f"! Could not open the New item form: {exc}")
+        log("  Capturing the page anyway - open the form by hand if you can.")
+        snap(page, "inspect-open-failed")
+        input("  Press Enter once the New item panel is showing (or to give up)... ")
 
     controls = page.locator("input, textarea, [role='combobox'], [role='button'][aria-haspopup]")
     for i in range(controls.count()):
@@ -387,8 +465,15 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
             schema["choices"][label] = {"error": str(exc)}
             log(f"  ! {label}: {exc}")
 
+    schema["labels_on_page"] = sorted({
+        t.strip() for t in page.locator("label, [role='heading'], .ms-Label").all_inner_texts()
+        if t.strip()
+    })
+
     SCHEMA_OUT.write_text(json.dumps(schema, indent=2), encoding="utf-8")
+    snap(page, "inspect-final")
     log(f"\nWrote {SCHEMA_OUT.name} - send this file back to finish the mapping.")
+    log(f"Also send the newest screenshots/*.png if anything looked wrong.")
 
 
 # --------------------------------------------------------------------------- #
@@ -420,6 +505,24 @@ def resolve_workbook(cfg: dict[str, Any], page: Page | None) -> Path:
 # Entry point
 # --------------------------------------------------------------------------- #
 
+def launch_browser(pw, cfg: dict[str, Any]):
+    """Reuse one browser profile so the SharePoint sign-in survives between runs."""
+    common = dict(
+        user_data_dir=str(PROFILE_DIR),
+        headless=False,
+        args=["--start-maximized"],
+        no_viewport=True,
+        accept_downloads=True,
+    )
+    channel = cfg.get("browser_channel", "msedge")
+    if channel:
+        try:
+            return pw.chromium.launch_persistent_context(channel=channel, **common)
+        except Exception as exc:
+            log(f"Could not start '{channel}' ({exc}); falling back to bundled Chromium.")
+    return pw.chromium.launch_persistent_context(**common)
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Transfer audit rows into the Focus Audit list.")
     p.add_argument("--inspect", action="store_true",
@@ -443,14 +546,7 @@ def main() -> int:
     PROFILE_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as pw:
-        context = pw.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            headless=False,
-            channel="msedge",
-            args=["--start-maximized"],
-            no_viewport=True,
-            accept_downloads=True,
-        )
+        context = launch_browser(pw, cfg)
         page = context.pages[0] if context.pages else context.new_page()
 
         try:
@@ -496,6 +592,7 @@ def main() -> int:
                 except (FormError, PWTimeout) as exc:
                     failed += 1
                     log(f"  FAILED: {exc}")
+                    snap(page, f"row-{row.audit_id or row.excel_row}-failed")
                     if input("  Continue with the next row? [Y/n] ").strip().lower() in ("n", "no"):
                         break
 

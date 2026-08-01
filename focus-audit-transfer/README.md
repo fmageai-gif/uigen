@@ -112,4 +112,23 @@ that agent's email — usually a leaver, or a typo in column F.
 **It asks you to sign in every run.** Delete the `.browser-profile` folder and
 run `inspect.bat` again to re-establish the session.
 
-`last_run.log` holds a timestamped record of the most recent run.
+**The browser won't start.** `config.json` uses `"browser_channel": "msedge"`.
+Set it to `"chrome"`, or `""` to use the copy of Chromium that `setup.bat`
+installed.
+
+`last_run.log` holds a timestamped record of the most recent run, and
+`screenshots/` gets a PNG plus the page HTML whenever a row fails — send those
+along if you need something diagnosed.
+
+---
+
+## What has and hasn't been tested
+
+Verified against a synthetic workbook and a mock form that imitates SharePoint's
+DOM: the column mapping, the auditor and date filters, the dedupe log, the
+Valid/Invalid resolution-code rule with its suffix handling, dropdown matching,
+the people picker, and setting both date fields to 12:00 AM independently.
+
+Not verified against the **real** Focus Audit list — the field labels and
+control markup there may differ. `inspect.bat` exists to close that gap before
+any live run.
