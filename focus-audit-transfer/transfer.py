@@ -26,6 +26,8 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
+VERSION = "1.3"
+
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
 PROFILE_DIR = HERE / ".browser-profile"
@@ -372,6 +374,28 @@ class Form:
             "[class*='ms-PickerPersona']:visible, [class*='personDisplayPill']:visible")
         return bool(pill.count())
 
+    def close_dropdown(self) -> None:
+        """Make sure an open dropdown has really gone away before touching the next field.
+
+        These dropdowns render into a portal that covers the fields below them, so
+        a leftover open list silently swallows the next click - the failure shows up
+        as an unrelated field timing out with "subtree intercepts pointer events".
+        """
+        for _ in range(3):
+            if not self.page.get_by_role("option").count():
+                return
+            self.page.keyboard.press("Escape")
+            self.page.wait_for_timeout(400)
+
+        # Escape did not take: click a neutral part of the panel instead.
+        try:
+            self.page.get_by_text("New item", exact=False).first.click(timeout=3_000)
+            self.page.wait_for_timeout(300)
+        except Exception:
+            pass
+        if self.page.get_by_role("option").count():
+            log("    ! a dropdown is still open; the next field may be blocked")
+
     def set_choice(self, label: str, value: str, interactive: bool) -> None:
         """Pick an option from one of the filter-style choice dropdowns."""
         wanted = self.choice_map.get(label, {}).get(value, value).strip()
@@ -382,7 +406,7 @@ class Form:
         try:
             options.first.wait_for(state="visible", timeout=10_000)
         except PWTimeout:
-            self.page.keyboard.press("Escape")
+            self.close_dropdown()
             raise FormError(f"The '{label}' dropdown did not open")
 
         texts = [t.strip() for t in options.all_inner_texts()]
@@ -390,12 +414,13 @@ class Form:
         if match is None:
             # Escape must go to the page: clicking the field swaps the element out,
             # so pressing a key on the original locator would fail.
-            self.page.keyboard.press("Escape")
+            self.close_dropdown()
             self._resolve_manually(label, value, wanted, texts, interactive)
             return
 
         options.nth(texts.index(match)).click()
         self.page.wait_for_timeout(200)
+        self.close_dropdown()
         if match != wanted:
             log(f"    {label}: '{value}' -> '{match}'")
         else:
@@ -521,7 +546,8 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
     This is the step that unblocks everything else, so it never gives up: if the
     form cannot even be opened it still writes whatever it saw, plus screenshots.
     """
-    schema: dict[str, Any] = {"captured_at": datetime.now().isoformat(), "fields": []}
+    schema: dict[str, Any] = {"tool_version": VERSION,
+                              "captured_at": datetime.now().isoformat(), "fields": []}
     try:
         open_new_item(page, cfg)
     except Exception as exc:
@@ -563,8 +589,7 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
         finally:
             schema["choices"][label] = captured
             try:
-                page.keyboard.press("Escape")
-                page.wait_for_timeout(400)
+                Form(page=page).close_dropdown()
             except Exception:
                 pass
 
@@ -674,6 +699,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     cfg = load_config()
+    log(f"Focus Audit transfer v{VERSION}")
     PROFILE_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as pw:
