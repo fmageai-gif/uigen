@@ -1,0 +1,7 @@
+.venv/
+.browser-profile/
+submitted.json
+form_schema.json
+last_run.log
+ADHOC.xlsx
+__pycache__/

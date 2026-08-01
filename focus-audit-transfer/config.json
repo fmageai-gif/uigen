@@ -1,0 +1,42 @@
+{
+  "_comment": "Settings for the Focus Audit transfer tool. Edit the values below; do not rename the keys.",
+
+  "excel_path": "",
+  "excel_download_url": "https://cnxmail.sharepoint.com/sites/msteams_e5fb5e-HPLegacyLOB2/_layouts/15/download.aspx?SourceUrl=/sites/msteams_e5fb5e-HPLegacyLOB2/Shared%20Documents/HP%20Mainstream%20LOB/Admin/Derp%27s%20File/ADHOC.xlsx",
+  "sheet_name": "Audit Log",
+  "header_row": 1,
+
+  "list_url": "https://cnxmail.sharepoint.com/sites/ChangeManagementTeam/Lists/Focus%20Audit/AllItems.aspx",
+  "new_item_button": "New",
+
+  "auditor_name": "Sundeep Bhardwaj",
+
+  "columns": {
+    "audit_id": "A",
+    "audit_date": "B",
+    "call_date": "C",
+    "agent_name": "D",
+    "agent_email": "F",
+    "lob": "M",
+    "case_number": "N",
+    "case_subject": "O",
+    "genesys_id": "P",
+    "validation": "Q",
+    "case_resolution": "R",
+    "expected_resolution": "S",
+    "remarks": "T",
+    "auditor_name": "U",
+    "quick_case": "V"
+  },
+
+  "opportunities_text": "N/A",
+  "time_of_day": "12:00 AM",
+
+  "_choice_map_comment": "Excel value -> exact SharePoint dropdown option. Filled in after running --inspect. An empty map means 'use the Excel value as-is'.",
+  "choice_map": {
+    "LOB": {},
+    "Call/Chat Selection Criteria": {},
+    "Suggested Resolution Code": {},
+    "Validation": {}
+  }
+}
