@@ -40,6 +40,7 @@ Until that's done, values that don't match an option will pause and ask you.
 
 | Command | What it does |
 |---|---|
+| `run.bat --preview` | Prints what would be sent and what would be skipped. **No browser, nothing submitted** |
 | `run.bat --dry-run` | Fills one entry and stops **before** Save so you can check it |
 | `run.bat` | Lists the rows it will submit, asks you to confirm, then does them |
 | `run.bat --date 08/01/2026` | Only rows with that audit date |
@@ -49,8 +50,8 @@ Until that's done, values that don't match an option will pause and ask you.
 | `run.bat --force` | Re-submit rows already recorded as done |
 | `run.bat --include-unmatched` | Also attempt the skipped rows, pausing so you pick the criteria |
 
-**Run `--dry-run` first.** Check every field on that one entry before letting it
-loose on a full day.
+**Run `--preview` first**, then `--dry-run`. Preview costs nothing and shows the
+whole day's mapping at a glance; dry run proves the form filling works.
 
 ---
 
@@ -61,11 +62,12 @@ loose on a full day.
 2. Column **B** (`auditDate`) must fall in the date window (last 7 days by default).
 3. Anything whose `auditId` is already in `submitted.json` is skipped.
 
-4. Rows whose column S has no matching **Call/Chat Selection Criteria** option
-   are set aside. That field is required and only offers `Remote Solution`,
-   `Case Voided` and `Quick Case`, so a `Subscription Cancellation (SubCan)`
-   row could never be saved. Those rows are listed before anything is
-   submitted, so you always see what is being left out.
+4. Rows that cannot fill a **required dropdown** are set aside. Call/Chat
+   Selection Criteria only offers `Remote Solution`, `Case Voided` and
+   `Quick Case`, so a `Subscription Cancellation (SubCan)` row could never be
+   saved. Those rows are listed before anything is submitted, so you always see
+   what is being left out. `run.bat --preview` shows the same thing without
+   opening a browser.
 
 `submitted.json` is what stops double-entry. Don't delete it. It is written
 only after a save actually succeeds, so a failed row will be retried next run.
@@ -79,11 +81,11 @@ team, so the script only ever reads it.
 
 | Form field | Excel column | Rule |
 |---|---|---|
-| LOB | M `LOB` | varies (Instant Ink, All-In Plan, …) |
+| LOB | M `LOB` | Print / Instant Ink / Instant Ink Chat |
 | Call Listening Date | B `auditDate` | time set to 12:00 AM |
 | Agent Name | F `agentEmail` | people picker — typed, then the suggestion is clicked |
 | Call/Chat Selection Criteria | S `expectedResolutionCode` | |
-| Suggested Resolution Code | **R if Invalid, S if Valid** | see below |
+| Suggested Resolution Code | **R if Invalid, S if Valid** | see below; `Quick Case` → `NA` |
 | Call/Chat Date | C `Call Date` | time set to 12:00 AM |
 | CaseID | N `caseNumber` | |
 | Call/Chat ID | P `genesysTransactionId` | |
@@ -133,11 +135,13 @@ along if you need something diagnosed.
 
 ## What has and hasn't been tested
 
-Verified against a synthetic workbook and a mock form that imitates SharePoint's
-DOM: the column mapping, the auditor and date filters, the dedupe log, the
-Valid/Invalid resolution-code rule with its suffix handling, dropdown matching,
-the people picker, and setting both date fields to 12:00 AM independently.
+Verified against a synthetic workbook and a mock form built from the real
+form's captured markup: the column mapping, the auditor and date filters, the
+dedupe log, the Valid/Invalid resolution-code rule with its suffix handling,
+two-way dropdown matching, the people picker (including skipping the
+"Search Directory" entry), setting both date fields to 12:00 AM independently,
+and recovering when a dropdown is left open over the fields below it.
 
-Not verified against the **real** Focus Audit list — the field labels and
-control markup there may differ. `inspect.bat` exists to close that gap before
-any live run.
+Field locators and the dropdown option lists come from the live form. What has
+**not** been exercised is the real page itself — timing, the directory lookup,
+and Save. `--preview` and `--dry-run` exist to close that gap safely.

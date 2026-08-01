@@ -36,6 +36,8 @@
 
   "_required_choice_comment": "Options each required dropdown actually offers. A row whose value matches none of them can never be saved, so it is reported and skipped before the run starts. Empty a list to turn that field's check off.",
   "required_choice_options": {
+    "LOB": ["Print", "Instant Ink", "Instant Ink Chat"],
+    "Validation": ["Valid", "Invalid"],
     "Call/Chat Selection Criteria": ["Remote Solution", "Case Voided", "Quick Case"],
     "Suggested Resolution Code": [
       "NA",
@@ -45,6 +47,7 @@
       "Non-Tech Solution",
       "Remote Solution",
       "Offsite Solution",
+      "Exchange Solution",
       "Onsite Solution",
       "Parts Shipped",
       "Referred - for hardware service",
@@ -59,7 +62,8 @@
   "choice_map": {
     "LOB": {},
     "Call/Chat Selection Criteria": {},
-    "Suggested Resolution Code": {},
+    "_suggested_resolution_code_comment": "The dropdown has no Quick Case option, so those rows are logged as NA.",
+    "Suggested Resolution Code": {"Quick Case": "NA"},
     "Validation": {}
   }
 }

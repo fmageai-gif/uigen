@@ -26,7 +26,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -226,6 +226,47 @@ def partition_rows(cfg: dict[str, Any], rows: list[Row]) -> tuple[list[Row], lis
         else:
             keep.append(row)
     return keep, skip
+
+
+def describe_row(cfg: dict[str, Any], row: Row) -> dict[str, str]:
+    """What each dropdown would actually receive for this row, after mapping."""
+    required = cfg.get("required_choice_options") or {}
+    out: dict[str, str] = {}
+    for label in CHOICE_FIELDS:
+        raw = _row_choice_value(row, label)
+        value = cfg.get("choice_map", {}).get(label, {}).get(raw, raw).strip()
+        options = required.get(label) or []
+        landed = _best_option(value, options) if options else value
+        out[label] = landed or "<<no match>>"
+    return out
+
+
+def run_preview(cfg: dict[str, Any], rows: list[Row],
+                skipped: list[tuple[Row, str, str]]) -> None:
+    """Show what would be submitted, without opening a browser or touching the list."""
+    log(f"\n{'=' * 78}\nWOULD SUBMIT ({len(rows)} rows)\n{'=' * 78}")
+    for row in rows:
+        landed = describe_row(cfg, row)
+        log(f"\n{row.audit_id}   audit {row.audit_date}   call {row.call_date}   "
+            f"case {row.case_number}")
+        log(f"    Agent Name                    {row.agent_email}")
+        for label, value in landed.items():
+            source = _row_choice_value(row, label)
+            arrow = "" if value == source else f"      <- {source!r}"
+            log(f"    {label:29} {value}{arrow}")
+        log(f"    Call/Chat ID                  {row.genesys_id}")
+        log(f"    Case Subject                  {row.case_subject[:52]}")
+        log(f"    Comments/Summary              {row.remarks[:52]}")
+
+    log(f"\n{'=' * 78}\nWOULD SKIP ({len(skipped)} rows)\n{'=' * 78}")
+    for row, label, value in skipped:
+        log(f"  {row.audit_id}  case {row.case_number:12}  {label} <- {value!r}")
+
+    total = len(rows) + len(skipped)
+    if total:
+        log(f"\n{len(rows)} of {total} rows would transfer "
+            f"({100 * len(rows) // total}%).")
+    log("Nothing was submitted - this was a preview.")
 
 
 def load_submitted() -> list[str]:
@@ -698,6 +739,9 @@ def parse_args() -> argparse.Namespace:
                    help="capture the form's fields and dropdown options, then exit")
     p.add_argument("--dry-run", action="store_true",
                    help="fill the first row but stop before saving")
+    p.add_argument("--preview", action="store_true",
+                   help="print what would be submitted and what would be skipped, "
+                        "without opening a browser")
     p.add_argument("--date", help="only rows whose auditDate matches (e.g. 08/01/2026)")
     p.add_argument("--last-days", type=int, default=7,
                    help="how far back to look when --date is not given (default 7)")
@@ -716,6 +760,15 @@ def main() -> int:
     args = parse_args()
     cfg = load_config()
     log(f"Focus Audit transfer v{VERSION}")
+
+    if args.preview and cfg.get("excel_path", "").strip():
+        try:
+            rows = select_rows(cfg, read_rows(cfg, Path(cfg["excel_path"])), args)
+            run_preview(cfg, *partition_rows(cfg, rows))
+            return 0
+        finally:
+            flush_log()
+
     PROFILE_DIR.mkdir(exist_ok=True)
 
     with sync_playwright() as pw:
@@ -730,6 +783,10 @@ def main() -> int:
 
             workbook = resolve_workbook(cfg, page)
             rows = select_rows(cfg, read_rows(cfg, workbook), args)
+
+            if args.preview:
+                run_preview(cfg, *partition_rows(cfg, rows))
+                return 0
 
             skipped: list[tuple[Row, str, str]] = []
             if not args.include_unmatched:
