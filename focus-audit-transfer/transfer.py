@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "2.1"
+VERSION = "2.2"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -624,8 +624,21 @@ class Form:
     # -- submitting -------------------------------------------------------- #
 
     def save(self) -> None:
+        """Save the item, and confirm the panel actually closed.
+
+        Returning without checking would let a rejected save be recorded as
+        submitted, and the row would then never be offered again - lost silently.
+        The panel stays open when SharePoint refuses, so its disappearance is the
+        signal that the item was really created.
+        """
         self.page.get_by_role("button", name="Save", exact=True).click()
-        self.page.wait_for_timeout(2500)
+        try:
+            self.page.get_by_text("New item", exact=False).first.wait_for(
+                state="hidden", timeout=25_000)
+        except PWTimeout:
+            raise FormError("Save did not go through - the form is still open. "
+                            "Look for a validation message on the panel.")
+        self.page.wait_for_timeout(800)
 
 
 def _same_time(landed: str, time_of_day: str) -> bool:
