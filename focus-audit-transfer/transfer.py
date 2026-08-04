@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.7"
+VERSION = "1.8"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -416,32 +416,37 @@ class Form:
         suggestion = self.page.locator(
             ".ms-Suggestions-item:visible, [class*='peoplePicker'] [role='option']:visible, "
             "[role='listbox'] [role='option']:visible, [class*='suggestionItem']:visible")
-        try:
-            suggestion.first.wait_for(state="visible", timeout=15_000)
-        except PWTimeout:
-            raise FormError(f"No directory match appeared for {email}")
+        # "Search Directory" is an action at the foot of the list and appears
+        # immediately, so waiting for "a suggestion" returns before the directory
+        # lookup has produced anyone. Wait for an actual person instead.
+        pick, texts = -1, []
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            texts = suggestion.all_inner_texts()
+            pick = next((i for i, t in enumerate(texts)
+                         if t.strip() and "search directory" not in t.strip().lower()), -1)
+            if pick >= 0:
+                break
+            self.page.wait_for_timeout(500)
 
-        texts = suggestion.all_inner_texts()
-        pick = 0
-        for i, text in enumerate(texts):
-            if "search directory" in text.strip().lower():
-                continue
-            pick = i
-            break
-        else:
-            raise FormError(f"Only 'Search Directory' was offered for {email}")
+        if pick < 0:
+            raise FormError(f"The directory offered no match for {email} "
+                            f"(only {texts or 'nothing'} after 25s)")
 
+        before = self._person_pill_count()
         suggestion.nth(pick).click()
-        self.page.wait_for_timeout(300)
-        if not self._person_pill_present():
+        self.page.wait_for_timeout(600)
+        if self._person_pill_count() <= before:
             raise FormError(f"Picked a suggestion for {email} but no name pill appeared")
         log(f"    {label}: {texts[pick].splitlines()[0].strip()}")
 
-    def _person_pill_present(self) -> bool:
+    def _person_pill_count(self) -> int:
+        """Pills inside the form only - the list behind the panel is full of them."""
         pill = self.page.locator(
             "[class*='personaPill']:visible, [class*='pickerItem']:visible, "
-            "[class*='ms-PickerPersona']:visible, [class*='personDisplayPill']:visible")
-        return bool(pill.count())
+            "[class*='ms-PickerPersona']:visible, "
+            "[class*='ms-BasePicker'] [class*='personDisplayPill']:visible")
+        return pill.count()
 
     def close_dropdown(self) -> None:
         """Make sure an open dropdown has really gone away before touching the next field.
@@ -488,12 +493,27 @@ class Form:
             return
 
         options.nth(texts.index(match)).click()
-        self.page.wait_for_timeout(200)
+        self.page.wait_for_timeout(300)
         self.close_dropdown()
+        self._confirm_choice(label, match)
         if match != wanted:
             log(f"    {label}: '{value}' -> '{match}'")
         else:
             log(f"    {label}: {match}")
+
+    def _confirm_choice(self, label: str, chosen: str) -> None:
+        """Read the field back, so a mis-click cannot pass as a success.
+
+        Silently landing on the wrong option would put wrong data in the list, which
+        is worse than stopping. An empty readback is not treated as a failure: some
+        renderings expose no text for the collapsed field.
+        """
+        try:
+            shown = " ".join((self._control(label, prefer="combobox").inner_text() or "").split())
+        except Exception:
+            return
+        if shown and chosen.lower() not in shown.lower():
+            raise FormError(f"{label} reads {shown!r} after choosing {chosen!r}")
 
     def _resolve_manually(self, label: str, excel_value: str, wanted: str,
                           options: list[str], interactive: bool) -> None:
