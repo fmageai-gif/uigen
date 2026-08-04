@@ -34,6 +34,9 @@
     "quick_case": "V"
   },
 
+  "_max_text_length_comment": "Single-line SharePoint columns reject anything past 255 characters, which blocks Save. Longer values are trimmed. Set to 0 to send them untouched.",
+  "max_text_length": 255,
+
   "opportunities_text": "N/A",
   "time_of_day": "12:00 AM",
 

@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.9"
+VERSION = "2.0"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -351,7 +351,17 @@ class Form:
 
     # -- filling ----------------------------------------------------------- #
 
-    def set_text(self, label: str, value: str) -> None:
+    def set_text(self, label: str, value: str, limit: int = 0) -> None:
+        """Fill a single-line text field, trimmed to what the column will accept.
+
+        These are single-line SharePoint columns capped at 255 characters. Anything
+        longer is rejected outright with "Input exceeded the maximum length of 255",
+        and that error leaves the form invalid - which blocks Save and disrupts the
+        fields filled after it.
+        """
+        if limit and len(value) > limit:
+            value = value[:limit].rstrip()
+            log(f"    {label}: trimmed to {limit} characters")
         control = self._control(label)
         control.click()
         control.fill(value)
@@ -473,54 +483,76 @@ class Form:
     def set_choice(self, label: str, value: str, interactive: bool) -> None:
         """Pick an option from one of the filter-style choice dropdowns."""
         wanted = self.choice_map.get(label, {}).get(value, value).strip()
-        control = self._control(label, prefer="combobox")
-        control.click()
 
-        options = self.page.get_by_role("option")
-        try:
-            options.first.wait_for(state="visible", timeout=10_000)
-        except PWTimeout:
-            self.close_dropdown()
-            raise FormError(f"The '{label}' dropdown did not open")
-
-        texts = [t.strip() for t in options.all_inner_texts()]
+        texts = self._open_choice(label)
         match = _best_option(wanted, texts)
         if match is None:
-            # Escape must go to the page: clicking the field swaps the element out,
-            # so pressing a key on the original locator would fail.
             self.close_dropdown()
             self._resolve_manually(label, value, wanted, texts, interactive)
             return
 
-        options.nth(texts.index(match)).click()
-        self.page.wait_for_timeout(300)
-        self.commit_dropdown()
-
-        if not self._choice_shows(label, match):
-            log(f"    {label}: did not take ({self._choice_text(label)!r}) - retrying")
-            self._reselect(label, match)
-
-        shown = self._choice_text(label)
-        if not self._choice_shows(label, match):
-            raise FormError(f"{label} reads {shown!r} after choosing {match!r}")
+        picked = False
+        for attempt in (1, 2):
+            if attempt == 2:
+                log(f"    {label}: did not take ({self._choice_text(label)!r}) - retrying")
+                self._open_choice(label)
+            self._pick_option(match)
+            if self._choice_shows(label, match):
+                picked = True
+                break
+        if not picked:
+            raise FormError(f"{label} reads {self._choice_text(label)!r} "
+                            f"after choosing {match!r}")
 
         if match != wanted:
             log(f"    {label}: '{value}' -> '{match}'")
         else:
             log(f"    {label}: {match}")
 
-    def _reselect(self, label: str, match: str) -> None:
+    def _open_choice(self, label: str) -> list[str]:
+        control = self._control(label, prefer="combobox")
+        control.click()
+        options = self.page.get_by_role("option")
         try:
-            self._control(label, prefer="combobox").click()
-            options = self.page.get_by_role("option")
-            options.first.wait_for(state="visible", timeout=8_000)
-            texts = [t.strip() for t in options.all_inner_texts()]
-            if match in texts:
-                options.nth(texts.index(match)).click()
-                self.page.wait_for_timeout(400)
-            self.commit_dropdown()
-        except Exception as exc:
-            log(f"    ! retry of {label} failed: {exc}")
+            options.first.wait_for(state="visible", timeout=10_000)
+        except PWTimeout:
+            self.close_dropdown()
+            raise FormError(f"The '{label}' dropdown did not open")
+        self.page.wait_for_timeout(400)
+        return [t.strip() for t in options.all_inner_texts()]
+
+    def _pick_option(self, match: str) -> None:
+        """Narrow the list with the filter box, then click what is left.
+
+        Clicking straight out of the full list is what kept missing: filtering to
+        the one wanted option first removes any ambiguity about which row is where.
+        """
+        box = self.page.locator("input[placeholder*='filter' i]:visible")
+        options = self.page.get_by_role("option")
+
+        if box.count():
+            try:
+                box.first.fill(match)
+                self.page.wait_for_timeout(700)
+            except Exception:
+                pass
+
+        idx = _index_of(match, options.all_inner_texts())
+        if idx < 0 and box.count():
+            # Filtering hid it - the option is worded differently. Use the full list.
+            try:
+                box.first.fill("")
+                self.page.wait_for_timeout(600)
+            except Exception:
+                pass
+            idx = _index_of(match, options.all_inner_texts())
+        if idx < 0:
+            return                      # the caller's readback reports this
+
+        options.nth(idx).click()
+        self.page.wait_for_timeout(500)
+        self.commit_dropdown()
+        self.page.wait_for_timeout(400)
 
     def _choice_text(self, label: str) -> str:
         try:
@@ -570,6 +602,10 @@ class Form:
 def _same_time(landed: str, time_of_day: str) -> bool:
     squash = lambda s: re.sub(r"\s+", "", s).lower()
     return squash(time_of_day) in squash(landed)
+
+
+def _index_of(wanted: str, texts: list[str]) -> int:
+    return next((i for i, t in enumerate(texts) if t.strip().lower() == wanted.lower()), -1)
 
 
 def _xpath_literal(text: str) -> str:
@@ -651,11 +687,12 @@ def fill_row(form: Form, row: Row, cfg: dict[str, Any], interactive: bool) -> No
     form.set_choice("Call/Chat Selection Criteria", row.expected_resolution, interactive)
     form.set_choice("Suggested Resolution Code", row.suggested_resolution_code, interactive)
     form.set_date("Call/Chat Date", row.call_date, time_of_day)
-    form.set_text("CaseID", row.case_number)
-    form.set_text("Call/Chat ID", row.genesys_id)
-    form.set_text("Case Subject", row.case_subject)
-    form.set_text("What are the Opportunities", cfg.get("opportunities_text", "N/A"))
-    form.set_text("Comments/Summary", row.remarks)
+    limit = int(cfg.get("max_text_length", 255) or 0)
+    form.set_text("CaseID", row.case_number, limit)
+    form.set_text("Call/Chat ID", row.genesys_id, limit)
+    form.set_text("Case Subject", row.case_subject, limit)
+    form.set_text("What are the Opportunities", cfg.get("opportunities_text", "N/A"), limit)
+    form.set_text("Comments/Summary", row.remarks, limit)
     form.set_choice("Validation", row.validation, interactive)
 
 
