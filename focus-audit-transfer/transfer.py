@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.8"
+VERSION = "1.9"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -494,26 +494,60 @@ class Form:
 
         options.nth(texts.index(match)).click()
         self.page.wait_for_timeout(300)
-        self.close_dropdown()
-        self._confirm_choice(label, match)
+        self.commit_dropdown()
+
+        if not self._choice_shows(label, match):
+            log(f"    {label}: did not take ({self._choice_text(label)!r}) - retrying")
+            self._reselect(label, match)
+
+        shown = self._choice_text(label)
+        if not self._choice_shows(label, match):
+            raise FormError(f"{label} reads {shown!r} after choosing {match!r}")
+
         if match != wanted:
             log(f"    {label}: '{value}' -> '{match}'")
         else:
             log(f"    {label}: {match}")
 
-    def _confirm_choice(self, label: str, chosen: str) -> None:
-        """Read the field back, so a mis-click cannot pass as a success.
-
-        Silently landing on the wrong option would put wrong data in the list, which
-        is worse than stopping. An empty readback is not treated as a failure: some
-        renderings expose no text for the collapsed field.
-        """
+    def _reselect(self, label: str, match: str) -> None:
         try:
-            shown = " ".join((self._control(label, prefer="combobox").inner_text() or "").split())
+            self._control(label, prefer="combobox").click()
+            options = self.page.get_by_role("option")
+            options.first.wait_for(state="visible", timeout=8_000)
+            texts = [t.strip() for t in options.all_inner_texts()]
+            if match in texts:
+                options.nth(texts.index(match)).click()
+                self.page.wait_for_timeout(400)
+            self.commit_dropdown()
+        except Exception as exc:
+            log(f"    ! retry of {label} failed: {exc}")
+
+    def _choice_text(self, label: str) -> str:
+        try:
+            return " ".join((self._control(label, prefer="combobox").inner_text() or "").split())
         except Exception:
+            return ""
+
+    def _choice_shows(self, label: str, chosen: str) -> bool:
+        """Empty counts as a failure: an unset required field cannot be saved."""
+        return chosen.lower() in self._choice_text(label).lower()
+
+    def commit_dropdown(self) -> None:
+        """Close a dropdown by clicking away from it, keeping the value just picked.
+
+        Escape cancels the field editor rather than merely closing it, discarding the
+        selection. That only shows up on the last field, Validation: every earlier one
+        is committed by the click that moves on to the next field.
+        """
+        if not self.page.get_by_role("option").count():
             return
-        if shown and chosen.lower() not in shown.lower():
-            raise FormError(f"{label} reads {shown!r} after choosing {chosen!r}")
+        try:
+            self.page.get_by_text("New item", exact=False).first.click(timeout=3_000)
+            self.page.wait_for_timeout(400)
+        except Exception:
+            pass
+        if self.page.get_by_role("option").count():
+            self.close_dropdown()
 
     def _resolve_manually(self, label: str, excel_value: str, wanted: str,
                           options: list[str], interactive: bool) -> None:
