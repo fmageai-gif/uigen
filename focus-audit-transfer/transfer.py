@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.6"
+VERSION = "1.7"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -314,14 +314,25 @@ class Form:
 
     # -- locating ---------------------------------------------------------- #
 
-    def _control(self, label: str, roles: tuple[str, ...] = ()):
-        for selector in (f'[aria-label^="{label}"]:visible', f'[aria-label^="{label}"]'):
-            candidate = self.page.locator(selector)
-            if candidate.count():
-                return candidate.first
+    def _control(self, label: str, prefer: str = "field"):
+        """Find a field's control by the prefix of its accessible name.
 
-        for role in roles:
-            candidate = self.page.get_by_role(role, name=label, exact=False)
+        Each editor is wrapped in a span repeating the control's own aria-label, so
+        matching on aria-label alone lands on the wrapper - which cannot be typed
+        into. Real inputs are therefore matched first, then comboboxes (the choice
+        fields are divs), and only then anything else carrying the name.
+        """
+        name = label.replace('"', '\\"')
+        editable = (f'input[aria-label^="{name}"]:visible, '
+                    f'textarea[aria-label^="{name}"]:visible, '
+                    f'[aria-label^="{name}"] input:visible, '
+                    f'[aria-label^="{name}"] textarea:visible')
+        combobox = f'[role="combobox"][aria-label^="{name}"]:visible'
+        anything = f'[aria-label^="{name}"]:visible'
+
+        order = (combobox, editable, anything) if prefer == "combobox" else (editable, combobox, anything)
+        for selector in order:
+            candidate = self.page.locator(selector)
             if candidate.count():
                 return candidate.first
 
@@ -341,7 +352,7 @@ class Form:
     # -- filling ----------------------------------------------------------- #
 
     def set_text(self, label: str, value: str) -> None:
-        control = self._control(label, ("textbox",))
+        control = self._control(label)
         control.click()
         control.fill(value)
 
@@ -352,7 +363,7 @@ class Form:
         so the date and time are typed together and the callout is closed with Enter.
         The time defaults to 12:00 AM, but it is verified rather than assumed.
         """
-        control = self._control(label, ("combobox", "textbox"))
+        control = self._control(label)
         control.click()
         control.fill(f"{value} {time_of_day}")
         control.press("Enter")
@@ -396,7 +407,7 @@ class Form:
             log(f"    ! could not set the time to {time_of_day}")
 
     def set_person(self, label: str, email: str) -> None:
-        control = self._control(label, ("combobox", "textbox"))
+        control = self._control(label)
         control.click()
         control.fill(email)
 
@@ -457,7 +468,7 @@ class Form:
     def set_choice(self, label: str, value: str, interactive: bool) -> None:
         """Pick an option from one of the filter-style choice dropdowns."""
         wanted = self.choice_map.get(label, {}).get(value, value).strip()
-        control = self._control(label, ("combobox", "button"))
+        control = self._control(label, prefer="combobox")
         control.click()
 
         options = self.page.get_by_role("option")
@@ -614,7 +625,10 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
         log("  Open it by hand in the browser window - click New on the list.")
         input("  Press Enter once the New item panel is showing... ")
 
-    controls = page.locator("input, textarea, [role='combobox'], [role='button'][aria-haspopup]")
+    # span[aria-label] matters: the form wraps each editor in one repeating the
+    # control's own name, and a locator matching aria-label alone hits the wrapper.
+    controls = page.locator("input, textarea, [role='combobox'], "
+                            "[role='button'][aria-haspopup], span[aria-label]")
     for i in range(controls.count()):
         el = controls.nth(i)
         try:
@@ -635,7 +649,7 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
         captured: Any = {"error": "not reached"}
         try:
             form = Form(page=page)
-            control = form._control(label, ("combobox", "button"))
+            control = form._control(label, prefer="combobox")
             control.click()
             page.get_by_role("option").first.wait_for(state="visible", timeout=10_000)
             # Store before closing: tidying up must never lose what was captured.
@@ -655,7 +669,7 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
     for label in DATE_FIELDS:
         try:
             form = Form(page=page)
-            control = form._control(label, ("combobox", "textbox"))
+            control = form._control(label)
             control.click()
             page.wait_for_timeout(800)
             inner = page.locator("[class*='Callout']:visible input, [class*='callout']:visible input, "
