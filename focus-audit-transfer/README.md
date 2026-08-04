@@ -17,15 +17,22 @@ anywhere except on your PC.
 1. Install **Python 3.10+** from [python.org](https://www.python.org/downloads/).
    On the first screen, tick **"Add python.exe to PATH"**.
 2. Double-click **`setup.bat`** and wait for it to finish.
-3. Sync the workbook so the script can read it:
-   open *Derp's File* in SharePoint → **Sync**. Then put the resulting local
-   path into `excel_path` in `config.json`, for example:
+3. Sync the workbook so the script can read it: open *Derp's File* in
+   SharePoint → **Sync** (or **Add shortcut to OneDrive**).
+
+   You do **not** need to find the path. Leaving `excel_path` empty makes the
+   tool search your OneDrive folders for `ADHOC.xlsx`, preferring one inside a
+   folder matching `excel_path_hint`, and taking the most recently modified if
+   several turn up. It prints which file it chose.
+
+   Set `excel_path` only to override that. Use forward slashes:
 
    ```json
-   "excel_path": "C:\\Users\\you\\Concentrix\\HP Mainstream LOB - Admin\\Derp's File\\ADHOC.xlsx"
+   "excel_path": "C:/Users/you/OneDrive - Concentrix/HP Mainstream LOB/Admin/Derp's File/ADHOC.xlsx"
    ```
 
-   Leave `excel_path` as `""` to download a fresh copy each run instead.
+   If nothing is synced and no file is found, it downloads a copy through the
+   browser instead.
 
 ## Capture the form layout (once)
 

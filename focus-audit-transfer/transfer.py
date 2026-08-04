@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -26,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.4"
+VERSION = "1.5"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -690,19 +691,67 @@ def inspect_form(page: Page, cfg: dict[str, Any]) -> None:
 # Excel retrieval
 # --------------------------------------------------------------------------- #
 
-def resolve_workbook(cfg: dict[str, Any], page: Page | None) -> Path:
+def find_local_workbook(cfg: dict[str, Any]) -> Path | None:
+    """Look for the synced copy of the workbook under the user's OneDrive folders.
+
+    Saves having to hunt down the path by hand: once the library is synced, the
+    file sits somewhere under a "OneDrive - <org>" folder in the home directory,
+    but the exact location depends on which folder the shortcut was added for.
+    """
+    name = cfg.get("excel_filename") or "ADHOC.xlsx"
+    hint = (cfg.get("excel_path_hint") or "").lower()
+
+    try:
+        roots = [p for p in Path.home().iterdir()
+                 if p.is_dir() and any(k in p.name.lower()
+                                       for k in ("onedrive", "sharepoint", "concentrix"))]
+    except OSError:
+        return None
+    if not roots:
+        return None
+
+    matches: list[Path] = []
+    deadline = time.monotonic() + 25
+    for root in roots:
+        try:
+            for path in root.rglob(name):
+                matches.append(path)
+                if time.monotonic() > deadline:
+                    break
+        except OSError:
+            continue
+        if time.monotonic() > deadline:
+            log("    (stopped searching after 25s)")
+            break
+
+    if not matches:
+        return None
+    preferred = [p for p in matches if hint and hint in str(p).lower()]
+    return max(preferred or matches, key=lambda p: p.stat().st_mtime)
+
+
+def local_workbook(cfg: dict[str, Any]) -> Path | None:
+    """The workbook on disk, if there is one - configured path first, then a search."""
     configured = cfg.get("excel_path", "").strip()
     if configured:
-        path = Path(configured)
+        path = Path(configured).expanduser()
         if not path.exists():
             sys.exit(f"excel_path points at {path}, which does not exist")
-        log(f"Reading {path}")
         return path
+    return find_local_workbook(cfg)
+
+
+def resolve_workbook(cfg: dict[str, Any], page: Page | None) -> Path:
+    found = local_workbook(cfg)
+    if found:
+        log(f"Reading {found}")
+        return found
 
     if page is None:
-        sys.exit("excel_path is empty and no browser is available to download the workbook")
+        sys.exit(f"Could not find {cfg.get('excel_filename', 'the workbook')} on this PC, "
+                 f"and no browser is available to download it")
 
-    log("excel_path is empty - downloading the workbook from SharePoint")
+    log("No local copy found - downloading the workbook from SharePoint")
     target = HERE / "ADHOC.xlsx"
     with page.expect_download(timeout=120_000) as dl:
         page.goto(cfg["excel_download_url"])
@@ -761,13 +810,17 @@ def main() -> int:
     cfg = load_config()
     log(f"Focus Audit transfer v{VERSION}")
 
-    if args.preview and cfg.get("excel_path", "").strip():
-        try:
-            rows = select_rows(cfg, read_rows(cfg, Path(cfg["excel_path"])), args)
-            run_preview(cfg, *partition_rows(cfg, rows))
-            return 0
-        finally:
-            flush_log()
+    if args.preview:
+        found = local_workbook(cfg)
+        if found:
+            try:
+                log(f"Reading {found}")
+                rows = select_rows(cfg, read_rows(cfg, found), args)
+                run_preview(cfg, *partition_rows(cfg, rows))
+                return 0
+            finally:
+                flush_log()
+        log("No local copy found - opening a browser to download the workbook")
 
     PROFILE_DIR.mkdir(exist_ok=True)
 

@@ -1,7 +1,10 @@
 {
   "_comment": "Settings for the Focus Audit transfer tool. Edit the values below; do not rename the keys.",
 
+  "_excel_path_comment": "Leave empty to let the tool find the synced copy of excel_filename under your OneDrive folders. Set it only to override that.",
   "excel_path": "",
+  "excel_filename": "ADHOC.xlsx",
+  "excel_path_hint": "Derp's File",
   "excel_download_url": "https://cnxmail.sharepoint.com/sites/msteams_e5fb5e-HPLegacyLOB2/_layouts/15/download.aspx?SourceUrl=/sites/msteams_e5fb5e-HPLegacyLOB2/Shared%20Documents/HP%20Mainstream%20LOB/Admin/Derp%27s%20File/ADHOC.xlsx",
   "sheet_name": "Audit Log",
   "header_row": 1,
