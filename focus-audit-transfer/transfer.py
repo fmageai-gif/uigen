@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "2.0"
+VERSION = "2.1"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
@@ -362,9 +362,19 @@ class Form:
         if limit and len(value) > limit:
             value = value[:limit].rstrip()
             log(f"    {label}: trimmed to {limit} characters")
+
         control = self._control(label)
-        control.click()
-        control.fill(value)
+        for attempt in (1, 2):
+            control.click()
+            control.fill(value)
+            self.page.wait_for_timeout(250)
+            if (control.input_value() or "").strip() == value.strip():
+                return
+            if attempt == 1:
+                log(f"    {label}: did not take - retrying")
+
+        landed = (control.input_value() or "").strip()
+        raise FormError(f"{label} reads {landed[:60]!r} after typing {value[:60]!r}")
 
     def set_date(self, label: str, value: str, time_of_day: str) -> None:
         """Fill a SharePoint date+time field and confirm the time came out right.
@@ -382,6 +392,7 @@ class Form:
         landed = (control.input_value() or "").strip()
         if _same_time(landed, time_of_day) and value.lstrip("0") in landed.replace(" 0", " "):
             log(f"    {label}: {landed}")
+            self._dismiss_callout()
             return
 
         # Typing them together was rejected - fall back to date only, then the
@@ -397,6 +408,24 @@ class Form:
         if not _same_time(landed, time_of_day):
             raise FormError(
                 f"{label} ended up as '{landed}' - expected the time to be {time_of_day}")
+        self._dismiss_callout()
+
+    def _dismiss_callout(self) -> None:
+        """Close the date callout before moving on.
+
+        It floats over the fields below, so one left open swallows the click meant
+        for the next field - which is how CaseID ended up empty.
+        """
+        callout = self.page.locator(
+            "[class*='ms-Callout']:visible, [class*='DateTimePicker-Fabric']:visible, "
+            "[class*='ms-DatePicker']:visible")
+        if not callout.count():
+            return
+        try:
+            self.page.get_by_text("New item", exact=False).first.click(timeout=3_000)
+            self.page.wait_for_timeout(350)
+        except Exception:
+            pass
 
     def _set_time_in_callout(self, time_of_day: str) -> None:
         """Set the time inside the open date callout, without touching the date box."""
