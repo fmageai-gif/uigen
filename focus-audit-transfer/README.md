@@ -45,6 +45,16 @@ Until that's done, values that don't match an option will pause and ask you.
 
 ## Daily use
 
+Double-click these; no typing needed:
+
+| File | What it does |
+|---|---|
+| **`preview.bat`** | Prints what would be sent and skipped. **No browser, submits nothing** |
+| **`dry-run.bat`** | Fills one entry in the browser, stops **before** Save |
+| **`run.bat`** | The real thing — asks you to confirm first |
+
+For anything else, open the folder, type `cmd` in the address bar, press Enter:
+
 | Command | What it does |
 |---|---|
 | `run.bat --preview` | Prints what would be sent and what would be skipped. **No browser, nothing submitted** |

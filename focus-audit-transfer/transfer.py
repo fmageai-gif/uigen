@@ -27,7 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
-VERSION = "1.5"
+VERSION = "1.6"
 
 HERE = Path(__file__).resolve().parent
 CONFIG_PATH = HERE / "config.json"
