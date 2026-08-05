@@ -139,6 +139,21 @@ window. Either use that one, or close it and try again.
 **"npm is not recognized"** — Node.js isn't installed, or PowerShell needs
 restarting after installing it. Go back to step 1.
 
+**"npm.ps1 cannot be loaded because running scripts is disabled on this
+system"** — Windows blocks PowerShell scripts by default, and npm is one.
+Fix it once for your own account:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+Press `Y` then Enter when it asks. Now `npm` works normally, in this window
+and every future one.
+
+If you would rather not change the setting, add `.cmd` to every npm command
+instead — `npm.cmd run setup`, `npm.cmd run dev`. Same result, but you have
+to remember it every time.
+
 **The page is blank or errors** — stop with Ctrl + C, then:
 
 ```powershell
