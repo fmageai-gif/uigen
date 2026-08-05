@@ -10,7 +10,20 @@ Written for Windows (PowerShell), but the commands are the same on Mac.
 ### 1. Install Node.js
 
 Download the **LTS** version from https://nodejs.org and run the installer.
-Accept every default.
+
+Click Next through the screens, with **one exception**. Near the end there is
+a checkbox:
+
+> Automatically install the necessary tools for Node.js modules that require
+> compilation (Python, Visual Studio Build Tools, chocolatey)
+
+**Leave it unchecked.** Checking it launches a separate Visual Studio
+installer that takes a very long time, often fails on corporate networks, and
+is not needed for this app.
+
+If you already checked it and a blue window full of `Warning:` and
+`Failed to download` lines is running — just close that window. Node.js
+itself installed before it opened; that extra step is optional.
 
 Then open **PowerShell** (Start menu → type "PowerShell" → Enter) and check
 it worked:
