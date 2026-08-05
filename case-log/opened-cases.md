@@ -37,3 +37,10 @@ the remaining 71 need to be captured before the pool is exhausted.
 1. Pick from **Available pool** only — top of the list first (newest Created On).
 2. On pick: move the row to **Opened**, stamp the date, never return it to the pool.
 3. Before every pick, re-read this file. If an ID already appears under Opened, skip it.
+
+## Superseded by the app
+
+The `Case` table is now the source of truth — see `/cases`. The
+`openedAt` column enforces rule 3 in the database rather than by hand:
+`openCase()` claims a row only `WHERE openedAt IS NULL`, so a second
+open of the same ID cannot succeed. This file stays as the origin record.

@@ -21,6 +21,22 @@ model User {
   projects  Project[]
 }
 
+model Case {
+  id         String    @id @default(cuid())
+  caseId     String    @unique
+  subject    String
+  createdOn  DateTime
+  modifiedBy String?
+  resolution String?
+  quickCase  Boolean   @default(false)
+  openedAt   DateTime?
+  openedBy   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([openedAt])
+}
+
 model Project {
   id        String   @id @default(cuid())
   name      String

@@ -10,7 +10,8 @@
     "lint": "next lint",
     "test": "vitest",
     "setup": "npm install && npx prisma generate && npx prisma migrate dev",
-    "db:reset": "npx prisma migrate reset --force"
+    "db:reset": "npx prisma migrate reset --force",
+    "db:seed-cases": "npx tsx prisma/seed-cases.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "1.2.12",
