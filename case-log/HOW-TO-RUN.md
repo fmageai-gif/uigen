@@ -1,0 +1,144 @@
+# How to run the Case Queue
+
+Step-by-step, from nothing installed to the app open in your browser.
+Written for Windows (PowerShell), but the commands are the same on Mac.
+
+---
+
+## One time only
+
+### 1. Install Node.js
+
+Download the **LTS** version from https://nodejs.org and run the installer.
+Accept every default.
+
+Then open **PowerShell** (Start menu → type "PowerShell" → Enter) and check
+it worked:
+
+```powershell
+node --version
+```
+
+You should see something like `v22.22.0`. Any number 18 or higher is fine.
+If you get "not recognized", close PowerShell, open it again, and retry —
+the installer needs a fresh window.
+
+### 2. Install Git
+
+Download from https://git-scm.com/download/win, run it, accept the defaults.
+Check it:
+
+```powershell
+git --version
+```
+
+### 3. Get the code
+
+This downloads the project into a `uigen` folder inside your Documents:
+
+```powershell
+cd ~\Documents
+git clone https://github.com/fmageai-gif/uigen.git
+cd uigen
+git checkout claude/app-build-case-list-pdhsxo
+```
+
+That last line matters — it switches to the branch with the Case Queue on it.
+
+### 4. Install and set up
+
+```powershell
+npm run setup
+```
+
+Takes a couple of minutes. It installs dependencies and creates the local
+database. Warnings in yellow are normal; only red `ERR!` lines are problems.
+
+### 5. Load the cases
+
+```powershell
+npm run db:seed-cases
+```
+
+You should see:
+
+```
+Seeded 16 cases. Table now holds 16 (1 opened).
+```
+
+"1 opened" is correct — case `5163090341` was opened before the app existed.
+
+---
+
+## Every time you want to use it
+
+Open PowerShell and run:
+
+```powershell
+cd ~\Documents\uigen
+npm run dev
+```
+
+Wait for `Ready in ...`, then open your browser to:
+
+**http://localhost:3000/cases**
+
+To stop it: click back on the PowerShell window and press **Ctrl + C**.
+
+Leave that window open while you're using the app — closing it stops the app.
+
+---
+
+## Using it
+
+- Each row is a case. Click **Open** to claim one.
+- The row locks, greys out, and shows when you opened it. The button is gone
+  for good — that case can't be opened again.
+- The counters up top show how many are left and how many you've done.
+- The search box filters by case ID or subject.
+
+Your opens are saved to the local database file, so they survive closing the
+app and restarting your computer.
+
+---
+
+## Coming back after I push changes
+
+When new work lands on the branch:
+
+```powershell
+cd ~\Documents\uigen
+git pull origin claude/app-build-case-list-pdhsxo
+npm install
+npx prisma migrate deploy
+npm run dev
+```
+
+This keeps the cases you've already opened.
+
+---
+
+## If something goes wrong
+
+**"port 3000 is already in use"** — the app is already running in another
+window. Either use that one, or close it and try again.
+
+**"npm is not recognized"** — Node.js isn't installed, or PowerShell needs
+restarting after installing it. Go back to step 1.
+
+**The page is blank or errors** — stop with Ctrl + C, then:
+
+```powershell
+npx prisma generate
+npm run dev
+```
+
+**You want to wipe all opens and start over** — this deletes every opened
+record and reloads the 16 cases from scratch:
+
+```powershell
+npm run db:reset
+npm run db:seed-cases
+```
+
+Only do this deliberately. It cannot be undone.
