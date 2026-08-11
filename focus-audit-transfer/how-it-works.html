@@ -1,0 +1,328 @@
+<title>Focus Audit transfer — what it does and how it works</title>
+
+<style>
+  :root {
+    --ink:        #1B1E33;
+    --ink-soft:   #4A4E66;
+    --paper:      #F6F5F1;
+    --card:       #FFFFFF;
+    --rule:       #DCD9D2;
+    --accent:     #3F4BA8;
+    --accent-bg:  #EBECF8;
+    --valid:      #2E7D52;
+    --valid-bg:   #E4F1E9;
+    --invalid:    #B3402F;
+    --invalid-bg: #F8E7E4;
+    --skip:       #8A6212;
+    --skip-bg:    #F7EFDC;
+
+    --serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:  ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #E8E8F0; --ink-soft: #A7A9BF; --paper: #14161F; --card: #1C1F2C;
+      --rule: #2E3244; --accent: #98A1EE; --accent-bg: #232842;
+      --valid: #6FCB98; --valid-bg: #1B3128;
+      --invalid: #EC8A78; --invalid-bg: #351F1C;
+      --skip: #DCB463; --skip-bg: #322816;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #E8E8F0; --ink-soft: #A7A9BF; --paper: #14161F; --card: #1C1F2C;
+    --rule: #2E3244; --accent: #98A1EE; --accent-bg: #232842;
+    --valid: #6FCB98; --valid-bg: #1B3128;
+    --invalid: #EC8A78; --invalid-bg: #351F1C;
+    --skip: #DCB463; --skip-bg: #322816;
+  }
+  :root[data-theme="light"] {
+    --ink: #1B1E33; --ink-soft: #4A4E66; --paper: #F6F5F1; --card: #FFFFFF;
+    --rule: #DCD9D2; --accent: #3F4BA8; --accent-bg: #EBECF8;
+    --valid: #2E7D52; --valid-bg: #E4F1E9;
+    --invalid: #B3402F; --invalid-bg: #F8E7E4;
+    --skip: #8A6212; --skip-bg: #F7EFDC;
+  }
+
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 17px; line-height: 1.65;
+    margin: 0; padding: 0 20px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 47rem; margin: 0 auto; }
+  p, li { max-width: 40rem; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2rem, 5vw, 2.9rem); line-height: 1.12; letter-spacing: -0.015em; }
+  h2 { font-size: 1.6rem; line-height: 1.2; }
+  h3 { font-size: 1.1rem; }
+
+  header { padding: 72px 0 40px; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 18px;
+  }
+  .standfirst { font-size: 1.2rem; color: var(--ink-soft); margin-top: 20px; }
+
+  section { padding-top: 56px; display: flex; flex-direction: column; gap: 18px; }
+  section > h2 + p { margin-top: -4px; }
+  p { margin: 0; }
+  ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 10px; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  code { background: var(--accent-bg); color: var(--accent); padding: 0.1em 0.36em; border-radius: 3px; }
+
+  /* Before / after */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 620px) { .compare { grid-template-columns: 1fr; } }
+  .compare > div {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 20px 22px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .compare h3 { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em;
+                text-transform: uppercase; color: var(--ink-soft); font-weight: 500; }
+  .big { font-family: var(--serif); font-size: 2.1rem; line-height: 1; }
+
+  /* Pipeline — a run really is a sequence, so the numbers carry meaning */
+  ol.pipeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+  ol.pipeline li {
+    display: grid; grid-template-columns: 2.6rem 1fr; gap: 18px;
+    padding: 20px 0; border-top: 1px solid var(--rule); max-width: none;
+  }
+  ol.pipeline li:last-child { border-bottom: 1px solid var(--rule); }
+  .step-n {
+    font-family: var(--mono); font-size: 0.8rem; color: var(--accent);
+    padding-top: 0.25rem; font-variant-numeric: tabular-nums;
+  }
+  .step-b { display: flex; flex-direction: column; gap: 6px; }
+  .step-b p { color: var(--ink-soft); font-size: 0.96rem; }
+
+  /* Tables */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+       color: var(--ink-soft); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  td.src { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); }
+
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 0.72rem;
+    padding: 0.15em 0.6em; border-radius: 999px; font-weight: 500;
+  }
+  .pill.v { background: var(--valid-bg);   color: var(--valid); }
+  .pill.i { background: var(--invalid-bg); color: var(--invalid); }
+  .pill.s { background: var(--skip-bg);    color: var(--skip); }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-bg);
+    padding: 16px 20px; border-radius: 0 4px 4px 0;
+  }
+  .note p { max-width: none; }
+
+  .files { display: flex; flex-direction: column; gap: 12px; }
+  .file {
+    display: grid; grid-template-columns: 11rem 1fr; gap: 18px; align-items: baseline;
+    background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 16px 20px;
+  }
+  @media (max-width: 620px) { .file { grid-template-columns: 1fr; gap: 4px; } }
+  .file .mono { color: var(--accent); font-size: 0.9rem; }
+  .file p { font-size: 0.95rem; color: var(--ink-soft); max-width: none; }
+
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--rule);
+           color: var(--ink-soft); font-size: 0.85rem; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Internal tool · Quality</div>
+  <h1>Focus Audit transfer</h1>
+  <p class="standfirst">
+    Takes the audits you have already logged in <span class="mono">ADHOC.xlsx</span> and
+    enters them into the Focus Audit SharePoint list for you — one click, no retyping.
+  </p>
+</header>
+
+<section>
+  <h2>The job it replaces</h2>
+  <p>
+    Every audit logged in the workbook has to be re-entered by hand into the Focus Audit
+    list: twelve fields per entry, including three dropdowns, a people picker and two
+    date-and-time fields. The data already exists. The typing is pure duplication.
+  </p>
+  <div class="compare">
+    <div>
+      <h3>By hand</h3>
+      <div class="big">~3 min</div>
+      <p>per entry, twelve fields, every one a chance to mistype a case number.</p>
+    </div>
+    <div>
+      <h3>With the tool</h3>
+      <div class="big">~20 sec</div>
+      <p>per entry, unattended, with every field read back and checked before saving.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How a run works</h2>
+  <p>
+    It drives a real browser using your own SharePoint login — the same session you would
+    use yourself. There is no service account, no stored password, and nothing leaves your PC.
+  </p>
+
+  <ol class="pipeline">
+    <li>
+      <div class="step-n">01</div>
+      <div class="step-b">
+        <h3>Read the workbook</h3>
+        <p>Finds your OneDrive-synced copy of <span class="mono">ADHOC.xlsx</span> automatically
+           and reads the <span class="mono">Audit Log</span> sheet. It never writes to the file —
+           the workbook is shared with the team.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-n">02</div>
+      <div class="step-b">
+        <h3>Pick out your rows</h3>
+        <p>Keeps only rows where <span class="mono">auditorName</span> is you, dated within the
+           last seven days, and not already sent on a previous run.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-n">03</div>
+      <div class="step-b">
+        <h3>Translate the values</h3>
+        <p>The workbook and the list word things differently.
+           <span class="mono">Remote Solution (HW/SW Resolved Remotely via Phone/Chat)</span>
+           has to become <span class="mono">Remote Solution</span>; a stripped
+           <span class="mono">Subscription Cancellation</span> has to become
+           <span class="mono">Subscription Cancellation (SubCan)</span>. It matches in both
+           directions, and exact matches always win.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-n">04</div>
+      <div class="step-b">
+        <h3>Set aside what cannot be entered</h3>
+        <p>Some resolution codes have no counterpart in the list's required dropdowns.
+           Those rows are listed up front and skipped, rather than failing halfway through
+           a batch. You always see what was left out.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-n">05</div>
+      <div class="step-b">
+        <h3>Fill and verify each field</h3>
+        <p>Opens the New item form and fills all twelve fields, waiting for the directory
+           lookup to resolve the agent's email into a real person. Every field is then read
+           back. If a value did not land, it retries once, then stops and names the field.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-n">06</div>
+      <div class="step-b">
+        <h3>Save, confirm, remember</h3>
+        <p>Clicks Save and waits for the form to actually close — the panel stays open when
+           SharePoint refuses. Only once the entry is confirmed is the audit ID written to
+           <span class="mono">submitted.json</span>, so it is never sent twice.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>What lands where</h2>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>Form field</th><th>Comes from</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>LOB</td><td class="src">col M</td><td>Print / Instant Ink / Instant Ink Chat</td></tr>
+        <tr><td>Call Listening Date</td><td class="src">col B</td><td>time forced to 12:00 AM</td></tr>
+        <tr><td>Agent Name</td><td class="src">col F</td><td>email, resolved via the directory</td></tr>
+        <tr><td>Call/Chat Selection Criteria</td><td class="src">col S</td><td>narrowed to the list's wording</td></tr>
+        <tr><td>Suggested Resolution Code</td><td class="src">col R or S</td><td>R when Invalid, S when Valid</td></tr>
+        <tr><td>Call/Chat Date</td><td class="src">col C</td><td>time forced to 12:00 AM</td></tr>
+        <tr><td>CaseID</td><td class="src">col N</td><td></td></tr>
+        <tr><td>Call/Chat ID</td><td class="src">col P</td><td>Genesys transaction ID</td></tr>
+        <tr><td>Case Subject</td><td class="src">col O</td><td></td></tr>
+        <tr><td>What are the Opportunities</td><td class="src">—</td><td>always <span class="mono">N/A</span></td></tr>
+        <tr><td>Comments/Summary</td><td class="src">col T</td><td>first 255 characters</td></tr>
+        <tr><td>Validation</td><td class="src">col Q</td><td><span class="pill v">Valid</span> <span class="pill i">Invalid</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <p><strong>Why the resolution code has two sources.</strong> On a valid audit the expected
+    code is the right answer. On an invalid one, the code the agent actually used is what belongs
+    in the record — so it comes from column R, with the <span class="mono">(Invalid)</span> marker
+    removed. The parentheses in column S are part of the official code name and are always kept.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What it refuses to do</h2>
+  <p>
+    The failure that matters is not an error on screen — it is an entry that looks fine and
+    is quietly wrong. Three rules exist to prevent that.
+  </p>
+  <ul>
+    <li><strong>It will not guess.</strong> If a value matches no dropdown option, the run pauses
+        and asks rather than picking something close.</li>
+    <li><strong>It will not assume a field took.</strong> Every value is read back after being
+        entered. A field that will not hold its value stops the row and names itself.</li>
+    <li><strong>It will not mark a row done unless it saved.</strong> A failed row stays unrecorded
+        and comes back on the next run, so nothing is silently lost.</li>
+  </ul>
+  <p>
+    A typical day: <span class="pill v">18 entered</span> <span class="pill s">11 skipped</span> —
+    the skipped ones being resolution codes the list has no option for.
+  </p>
+</section>
+
+<section>
+  <h2>Running it</h2>
+  <div class="files">
+    <div class="file">
+      <span class="mono">preview.bat</span>
+      <p>Prints exactly what would be sent and what would be skipped. No browser, nothing submitted. Safe to run any time.</p>
+    </div>
+    <div class="file">
+      <span class="mono">dry-run.bat</span>
+      <p>Fills one entry in the browser and stops before Save, so you can check every field yourself.</p>
+    </div>
+    <div class="file">
+      <span class="mono">run.bat</span>
+      <p>The real thing. Lists the rows, asks you to confirm, then enters them one by one.</p>
+    </div>
+  </div>
+  <p>
+    Setup is once: install Python, run <code>setup.bat</code>, and sign in to SharePoint the
+    first time the browser opens. After that the session is remembered.
+  </p>
+</section>
+
+<section>
+  <h2>Known limits</h2>
+  <ul>
+    <li><strong>It only knows what it entered.</strong> Rows you add to the list by hand are
+        invisible to it and could be entered again.</li>
+    <li><strong>Long summaries are cut at 255 characters</strong> — the column will not accept
+        more, and an over-long value blocks the save entirely.</li>
+    <li><strong>Subscription Cancellation rows are skipped</strong>, since Call/Chat Selection
+        Criteria offers no matching option. About a third of rows on a typical day.</li>
+    <li><strong>It runs on your PC, as you.</strong> It is not a scheduled service and cannot
+        run while you are logged out.</li>
+  </ul>
+</section>
+
+<footer>
+  Built for the HP Mainstream quality team · source in <span class="mono">focus-audit-transfer/</span>
+</footer>
+
+</div>
