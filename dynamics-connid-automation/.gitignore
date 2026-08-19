@@ -1,0 +1,17 @@
+# Saved Microsoft session — contains live auth cookies. Never commit.
+auth_state.json
+*auth*state*.json
+storage_state*.json
+
+# Local config
+.env
+
+# Debug output
+screenshots/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
