@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -48,9 +49,12 @@ def _pick_serials(args) -> list[str]:
     if not available:
         raise SystemExit(
             "No adb devices found.\n"
-            "  - Emulator running? LDPlayer/MuMu/BlueStacks need ADB enabled in settings.\n"
-            "  - Try: adb connect 127.0.0.1:5555   (LDPlayer instance 0)\n"
-            "  - Multi-instance ports usually step by 2: 5555, 5557, 5559, ..."
+            "  - Is the emulator running with Android booted?\n"
+            "  - MuMu: Device Settings > Developer options > ADB debug >\n"
+            "    \"Enable local connection\", then restart the instance.\n"
+            "  - Then: swreroll connect mumu       (or: connect ldplayer / mumu6)\n"
+            "  - Still nothing? MuMu's Multi-Instance Manager shows the real\n"
+            "    ADB port per instance."
         )
     return available
 
@@ -113,6 +117,71 @@ def _record_geometry(dev: AdbDevice, templates_dir) -> capture.Geometry:
     else:
         capture.save(templates_dir, geom)
     return geom
+
+
+def cmd_sweep(args) -> int:
+    """Tap the tutorial points in rotation for a fixed time. No templates.
+
+    This is the first thing worth running on a new setup. It needs nothing
+    captured, so it proves the whole chain -- adb reaches the emulator, taps
+    land where the coordinates say, and the sweep order actually advances the
+    tutorial -- before an hour goes into cutting crops.
+    """
+    serial = (args.device or _pick_serials(args))[0]
+    dev = AdbDevice(serial=serial, adb_path=args.adb, dry_run=args.dry_run)
+    w, h = dev.screen_size()
+
+    if args.point:
+        raw = []
+        for entry in args.point:
+            try:
+                x, y = (float(v) for v in entry.split(","))
+            except ValueError:
+                raise SystemExit(f"--point wants x,y -- got {entry!r}")
+            raw.append([x, y])
+    else:
+        # Single source of truth: reuse the points the real flow taps, so
+        # tuning the flow tunes this too.
+        flow = load_flow(args.flow)
+        raw = []
+        for step in flow.phase(args.phase).steps:
+            if step.action == "tap_through":
+                raw = step.get("points") or []
+                break
+        if not raw:
+            raise SystemExit(f"no tap_through points found in phase {args.phase!r}")
+
+    points = [
+        (int(x * w), int(y * h)) if x <= 1.0 and y <= 1.0 else (int(x), int(y))
+        for x, y in raw
+    ]
+
+    print(f"{serial}  {w}x{h}  sweeping {len(points)} points for {args.seconds}s")
+    for i, (px, py) in enumerate(points):
+        print(f"  {i + 1}. ({px:>4}, {py:>3})")
+    print()
+
+    deadline = time.monotonic() + args.seconds
+    taps = 0
+    try:
+        while time.monotonic() < deadline:
+            dev.tap(*points[taps % len(points)])
+            taps += 1
+            if taps % len(points) == 0:
+                left = deadline - time.monotonic()
+                print(f"  {taps} taps, {left:.0f}s left", end="\r", flush=True)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print()
+        print("stopped")
+    print(f"\n{taps} taps sent.")
+    print(
+        "Did the tutorial advance? If yes, adb and the coordinates are good "
+        "and you can move on to capturing templates (SETUP.md step 6).\n"
+        "If nothing happened at all, the taps are not reaching the game -- "
+        "check `swreroll devices` shows it as `device`, not `offline`."
+    )
+    return 0
 
 
 def cmd_shot(args) -> int:
@@ -397,6 +466,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("-n", "--instances", type=int, default=1)
     s.set_defaults(func=cmd_connect)
+
+    s = sub.add_parser(
+        "sweep",
+        help="tap the tutorial points on a loop -- needs no templates, run this first",
+    )
+    s.add_argument("--seconds", type=float, default=180.0)
+    s.add_argument("--interval", type=float, default=0.6)
+    s.add_argument("--flow", default=str(DEFAULT_FLOW))
+    s.add_argument("--phase", default="tutorial")
+    s.add_argument("--point", action="append", help="x,y override (repeatable)")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_sweep)
 
     s = sub.add_parser("shot", help="capture a screenshot or cut a template from one")
     s.add_argument("--grid", action="store_true", help="overlay a labelled 100px grid")

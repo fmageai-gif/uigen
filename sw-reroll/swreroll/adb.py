@@ -133,6 +133,9 @@ class AdbDevice:
         """(width, height) in pixels, cached after the first call."""
         if self._size is not None:
             return self._size
+        if self.dry_run:
+            self._size = (1280, 720)
+            return self._size
         out = self.shell("wm", "size")
         m = re.search(r"(\d+)x(\d+)", out)
         if not m:
@@ -143,6 +146,8 @@ class AdbDevice:
     def screen_density(self) -> int | None:
         """Physical DPI. Changing this reflows the game UI even when the
         resolution is unchanged, which silently invalidates every template."""
+        if self.dry_run:
+            return 240
         out = self.shell("wm", "density")
         m = re.search(r"(?:Override|Physical) density:\s*(\d+)", out)
         return int(m.group(1)) if m else None

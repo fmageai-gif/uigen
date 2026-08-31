@@ -552,3 +552,11 @@ def test_a_guide_region_ignores_the_same_glyph_elsewhere(ctx_factory, arrows, ba
     }]))
     assert dev.taps[0] == (920, 720)     # the low one, +95
     assert (620, 160) not in dev.taps    # the top one, never
+
+
+def test_dry_run_reports_a_screen_size_without_a_device(tmp_path):
+    """Dry run must rehearse without an emulator; it used to crash on wm size."""
+    from swreroll.adb import AdbDevice
+    dev = AdbDevice(serial="fake:1", adb_path="/bin/true", dry_run=True)
+    assert dev.screen_size() == (1280, 720)
+    assert dev.screen_density() == 240
