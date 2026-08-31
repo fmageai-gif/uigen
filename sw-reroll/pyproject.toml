@@ -19,6 +19,9 @@ dev = ["pytest>=8.0"]
 [project.scripts]
 swreroll = "swreroll.cli:main"
 
+[project.gui-scripts]
+swreroll-gui = "swreroll.gui:main"
+
 [tool.setuptools]
 packages = ["swreroll"]
 
