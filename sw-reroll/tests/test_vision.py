@@ -119,3 +119,64 @@ def test_find_all_honours_max_hits(badge):
     for i in range(6):
         stamp(screen, badge, 100 + i * 100, 300)
     assert len(find_all(screen, badge, threshold=0.9, max_hits=3)) == 3
+
+
+# ---- colour matching -----------------------------------------------------
+#
+# The element icons differ mainly by hue: light is a silver crest, dark a
+# purple disc. Greyscale throws that away, and confusing the two means either
+# wiping an LD5 or banking a dud.
+
+def _disc(color, size=44):
+    """A solid coloured disc on a dark panel -- shaped like an element icon."""
+    img = np.zeros((size, size, 3), np.uint8)
+    img[:] = (40, 30, 50)
+    cv2.circle(img, (size // 2, size // 2), size // 2 - 4, color, -1)
+    return img
+
+
+def test_greyscale_confuses_two_icons_of_equal_luminance():
+    """The defect that colour matching exists to fix."""
+    #  Purple and a grey-green chosen to share a luminance, differ in hue.
+    dark = _disc((150, 40, 140))
+    other = _disc((95, 95, 95))
+    screen = stamp(make_screen(), other, 600, 300)
+
+    grey = find_template(screen, dark, threshold=0.85, color=False)
+    colour = find_template(screen, dark, threshold=0.85, color=True)
+    # Greyscale scores the wrong icon far higher than colour does.
+    assert colour.score < grey.score
+
+
+def test_colour_matching_finds_the_right_icon(badge):
+    dark = _disc((150, 40, 140))
+    screen = stamp(make_screen(), dark, 600, 300)
+    m = find_template(screen, dark, threshold=0.9, color=True)
+    assert m.found
+    assert m.center == pytest.approx((622, 322), abs=4)
+
+
+def test_colour_matching_rejects_a_different_hue():
+    """A silver crest must not match where a purple disc is, and vice versa."""
+    dark = _disc((150, 40, 140))
+    light = _disc((225, 225, 230))
+    screen = stamp(make_screen(), light, 600, 300)
+    assert find_template(screen, dark, threshold=0.9, color=True).found is False
+    assert find_template(screen, light, threshold=0.9, color=True).found is True
+
+
+def test_find_all_supports_colour(badge):
+    gold = _disc((60, 200, 240), size=30)
+    screen = make_screen()
+    for i in range(5):
+        stamp(screen, gold, 300 + i * 60, 400)
+    assert len(find_all(screen, gold, threshold=0.9, color=True)) == 5
+
+
+def test_a_greyscale_template_still_works_in_colour_mode():
+    """A crop saved as greyscale must not blow up when color=True."""
+    gold = _disc((60, 200, 240), size=30)
+    screen = stamp(make_screen(), gold, 400, 400)
+    grey_template = cv2.cvtColor(gold, cv2.COLOR_BGR2GRAY)
+    m = find_template(screen, grey_template, threshold=0.5, color=True)
+    assert m.score >= 0.0  # converted, matched, did not raise

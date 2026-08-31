@@ -51,6 +51,11 @@ depends on OCR reading a stylised name correctly.
 and the reroll continues, so `swreroll stats` shows what the mystical scrolls
 are actually buying without ever ending a run on a monster you didn't want.
 
+Element icons are matched **in colour**. Light is a silver crest, dark a
+purple disc, and greyscale matching — the right default for UI buttons, since
+it shrugs off animation brightness — throws away precisely the feature that
+separates them.
+
 ### The asymmetry that shapes this
 
 The two mistakes cost wildly different amounts:
@@ -69,13 +74,24 @@ screenshotted for you to check by hand.
 If `UNVERIFIED` shows up more than rarely, element detection is broken and
 real LD5s are at risk — recut the icons before running overnight.
 
-**By name (OCR).** For a specific shortlist rather than any LD5. Tesseract
-reads the monster's name and fuzzy-matches it against a wanted list — fuzzy
-because stylised game fonts make Tesseract swap glyphs predictably (`B`→`8`,
-`l`→`1`, `S`→`5`), which the matcher folds together before comparing.
+**By name (OCR).** Reads the name and fuzzy-matches it against a wanted list
+— fuzzy because stylised game fonts make Tesseract swap glyphs predictably
+(`B`→`8`, `l`→`1`, `S`→`5`), which the matcher folds together before comparing.
+
+**Two things make this the wrong tool for "any LD5",** and both are visible on
+a real result screen:
+
+1. A freshly summoned monster is **unawakened**, so the panel shows its
+   *family* name — `Oracle`, not `Praha`. A list of awakened names matches
+   nothing, ever.
+2. Family names are **shared across all five elements**. There is a fire
+   Oracle and a light Oracle, so the name alone cannot tell you whether you
+   have an LD5.
+
+Use it only for "this specific family, and check the element separately".
 
 ```bash
-swreroll run --want Ariel --want Beelzebub
+swreroll run --want Oracle     # family name, not awakened name
 ```
 
 **By image.** Drop a portrait crop into `templates/keepers/`. Useful for a
@@ -332,7 +348,7 @@ swreroll/
   cli.py      connect / devices / shot / check / ocr / phase / run / stats
 flows/        the reroll script (edit this)
 templates/    your captured crops (not committed)
-tests/        102 tests, no emulator required
+tests/        107 tests, no emulator required
 ```
 
 ```bash

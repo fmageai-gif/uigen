@@ -21,12 +21,19 @@ adding a target is one line of YAML instead of a new screenshot.
 
 Grade detection needs only these, and they decide every keep:
 
-- `ui/star` — **one** star glyph, cut tight, with no neighbouring star in the
-  crop. `find_all` counts occurrences, so a loose crop that swallows part of
-  the next star will miscount.
+- `ui/star` — **one** gold star glyph from the row directly beneath the
+  monster's name, cut tight, with no neighbouring star in the crop.
+  `find_all` counts occurrences, so a loose crop that swallows part of the
+  next star will miscount — and a 4-vs-5 miscount is what wipes your LD5.
 - `ui/elem_light`, `ui/elem_dark`, `ui/elem_fire`, `ui/elem_water`,
-  `ui/elem_wind` — the element icons. Cut all five from the same spot on the
-  result panel so they are directly comparable.
+  `ui/elem_wind` — the element icons, immediately **left of the "Lv.1 Name"
+  row** on the result panel. Light is a silver/white crest; dark is a purple
+  disc. Cut all five from the same spot so they are directly comparable.
+
+  These are matched **in colour** (`element_color: true`, the default),
+  because hue is what separates them — in greyscale a silver crest and a
+  purple disc can share a luminance pattern closely enough to be confused,
+  and confusing them means wiping an LD5.
 
   Capturing fire/water/wind is not optional busywork: identifying them
   positively is what lets the bot discard a non-LD nat 5 with confidence.

@@ -461,8 +461,14 @@ def _act_evaluate_grade(ctx: Context, step: Step) -> None:
     screen = ctx.screen()
     threshold = _threshold(ctx, step)
 
+    # Colour on by default here. Grade stars are gold and the element icons
+    # differ mainly by hue, which is exactly what greyscale discards.
+    star_color = bool(step.get("star_color", True))
+    element_color = bool(step.get("element_color", True))
+
     stars = ctx.store.find_all(
-        screen, star, threshold=threshold, region=star_region, max_hits=8
+        screen, star, threshold=threshold, region=star_region,
+        max_hits=8, color=star_color,
     )
     count = len(stars)
     ctx.vars["stars"] = count
@@ -477,7 +483,10 @@ def _act_evaluate_grade(ctx: Context, step: Step) -> None:
     # if fire matched, we KNOW it is not an LD5 and can wipe with confidence.
     element, best_score = None, 0.0
     for label, tpl in elements.items():
-        m = ctx.store.find(screen, str(tpl), threshold=threshold, region=elem_region)
+        m = ctx.store.find(
+            screen, str(tpl), threshold=threshold,
+            region=elem_region, color=element_color,
+        )
         if m.found and m.score > best_score:
             element, best_score = str(label), m.score
     ctx.vars["element"] = element

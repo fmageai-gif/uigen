@@ -17,15 +17,21 @@ defaults:
   # the account whoever the monster is. That never goes stale when Com2uS
   # adds an LD5, and it does not depend on OCR reading a stylised name.
   #
-  # `wanted` below is only used if you switch to `evaluate_names` -- useful
-  # when you want a specific shortlist rather than any LD5. Verify it against
-  # swarfarm.com first; the LD roster has grown a lot.
+  # `wanted` is for `evaluate_names`, and TWO THINGS MAKE IT THE WRONG TOOL
+  # for "any LD5" -- both visible on a real result screen:
+  #
+  #   1. A freshly summoned monster is UNAWAKENED, so the panel shows its
+  #      FAMILY name ("Oracle"), not its awakened name ("Praha"). A list of
+  #      awakened names matches nothing, ever.
+  #   2. Family names are shared across all five elements. There is a fire
+  #      Oracle and a light Oracle. So the name alone cannot tell you whether
+  #      you have an LD5 at all.
+  #
+  # Use `evaluate_grade` instead. This list is kept only for the case where
+  # you want a specific FAMILY plus the element check, and the names below
+  # are family names for that reason.
   wanted:
-    - Ariel
-    - Jeanne
-    - Vigor
-    - Beelzebub
-    - Zeratu
+    - Oracle
 
   # Phases to skip once the account is already a keeper. `reset` and `wipe`
   # are always protected; mystical scrolls are listed here because once you
@@ -163,11 +169,16 @@ phases:
                 interval: 0.7
                 timeout: 90
                 optional: true
+            # The result panel sits on the RIGHT of the screen, not the
+            # centre: element icon and name on one row, the star row directly
+            # beneath it, stats below that. These regions are ESTIMATED from a
+            # cropped screenshot -- tighten both with `swreroll shot --grid`
+            # before trusting them.
             - evaluate_grade:
                 star_template: ui/star
-                star_region: [0.30, 0.70, 0.40, 0.09]
+                star_region: [0.70, 0.28, 0.30, 0.10]
                 min_stars: 5
-                element_region: [0.44, 0.55, 0.12, 0.10]
+                element_region: [0.69, 0.17, 0.09, 0.11]
                 # List ALL FIVE, not just light and dark. Identifying fire
                 # positively is what lets the bot wipe a fire nat 5 with
                 # confidence -- otherwise "no match" and "not LD" look the
@@ -185,7 +196,9 @@ phases:
                 on_unknown_element: keep
                 threshold: 0.86
                 save_notable: true
-            - tap: {at: [0.5, 0.92]}     # dismiss the result panel
+            # The panel's OK button is in the panel, on the right -- a blind
+            # centre-bottom tap misses it entirely.
+            - tap_text: {text: "OK", timeout: 15, optional: true, after: 1.0}
       - back: {}
 
   # -----------------------------------------------------------------------
@@ -211,11 +224,16 @@ phases:
                 interval: 0.7
                 timeout: 90
                 optional: true
+            # The result panel sits on the RIGHT of the screen, not the
+            # centre: element icon and name on one row, the star row directly
+            # beneath it, stats below that. These regions are ESTIMATED from a
+            # cropped screenshot -- tighten both with `swreroll shot --grid`
+            # before trusting them.
             - evaluate_grade:
                 star_template: ui/star
-                star_region: [0.30, 0.70, 0.40, 0.09]
+                star_region: [0.70, 0.28, 0.30, 0.10]
                 min_stars: 5
-                element_region: [0.44, 0.55, 0.12, 0.10]
+                element_region: [0.69, 0.17, 0.09, 0.11]
                 elements:
                   light: ui/elem_light
                   dark: ui/elem_dark
@@ -230,7 +248,7 @@ phases:
                 on_unknown_element: discard
                 threshold: 0.86
                 save_notable: true
-            - tap: {at: [0.5, 0.92]}
+            - tap_text: {text: "OK", timeout: 15, optional: true, after: 1.0}
       - back: {}
 
   # -----------------------------------------------------------------------

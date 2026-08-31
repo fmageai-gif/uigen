@@ -82,12 +82,25 @@ def find_template(
     threshold: float = 0.85,
     region: tuple[float, float, float, float] | None = None,
     scales: tuple[float, ...] = DEFAULT_SCALES,
+    color: bool = False,
 ) -> Match:
-    """Locate `template` inside `screen`. Coordinates come back in *device* pixels."""
+    """Locate `template` inside `screen`. Coordinates come back in *device* pixels.
+
+    Matching is greyscale by default, which is the right call for UI buttons:
+    it shrugs off the brightness shifts that animation and backgrounds cause.
+
+    Pass `color=True` when hue is the whole point. Summoners War's element
+    icons are the case that matters -- light is a silver crest, dark a purple
+    disc, and in greyscale those two can share a luminance pattern closely
+    enough to be confused. Confusing them means either wiping an LD5 or
+    banking a dud, so element checks match in colour.
+    """
     norm, factor = normalise(screen)
-    haystack_full = _to_gray(norm)
+    haystack_full = norm if color else _to_gray(norm)
     haystack, (off_x, off_y) = _crop_region(haystack_full, region)
-    needle_base = _to_gray(template)
+    needle_base = template if color else _to_gray(template)
+    if color and needle_base.ndim == 2:
+        needle_base = cv2.cvtColor(needle_base, cv2.COLOR_GRAY2BGR)
 
     best = Match(found=False, score=0.0)
     for scale in scales:
@@ -131,6 +144,7 @@ def find_all(
     threshold: float = 0.85,
     region: tuple[float, float, float, float] | None = None,
     max_hits: int = 20,
+    color: bool = False,
 ) -> list[Match]:
     """Every distinct occurrence of a template, not just the best one.
 
@@ -143,9 +157,11 @@ def find_all(
     Overlapping detections are suppressed so one star is never counted twice.
     """
     norm, factor = normalise(screen)
-    haystack_full = _to_gray(norm)
+    haystack_full = norm if color else _to_gray(norm)
     haystack, (off_x, off_y) = _crop_region(haystack_full, region)
-    needle = _to_gray(template)
+    needle = template if color else _to_gray(template)
+    if color and needle.ndim == 2:
+        needle = cv2.cvtColor(needle, cv2.COLOR_GRAY2BGR)
 
     th, tw = needle.shape[:2]
     if th > haystack.shape[0] or tw > haystack.shape[1]:
