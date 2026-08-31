@@ -230,6 +230,14 @@ def _parse_guides(step: Step) -> list[dict[str, Any]]:
             "name": str(raw["target"]),
             "offset": (int(offset[0]), int(offset[1])),
             "threshold": raw.get("threshold"),
+            # Several arrows of the same colour can be on screen at once.
+            "max_hits": raw.get("max_hits", 4),
+            "color": raw.get("color", True),
+            # Scope a guide to part of the screen. This is what separates the
+            # yellow arrow pointing DOWN at a skill icon (an instruction, low
+            # on screen) from the yellow arrow over the next-turn enemy (mere
+            # turn-order information, up top) -- they are the same glyph.
+            "region": tuple(float(v) for v in raw["region"]) if raw.get("region") else None,
         })
     return guides
 
@@ -238,21 +246,23 @@ def _parse_guides(step: Step) -> list[dict[str, Any]]:
 def _act_tap_through(ctx: Context, step: Step) -> None:
     """Advance a scripted sequence until an expected screen appears.
 
-    The Summoners War opening is on rails: it accepts a tap only on whatever
-    it is currently highlighting. Rather than guess where that is, follow the
-    game's own instruction -- it draws a green arrow over the thing you must
-    tap next, and a yellow one over the thing after that.
+    The Summoners War opening is on rails and it marks what to tap -- but the
+    marks are ambiguous. During the battle tutorial there are three arrows at
+    once: green over the current-turn enemy, yellow over the next-turn enemy,
+    and a third yellow one pointing down at the skill icon. The first two are
+    turn-order information; only the third is an instruction. Nothing in the
+    arrow itself says which is which.
 
-    So each iteration goes, in order:
+    The two are told apart by WHERE they are, not what they look like: an
+    instruction arrow points down at a button near the bottom of the screen,
+    turn-order arrows float over enemies near the top. Each guide can carry a
+    `region` to say which band it lives in.
 
-      1. Is the destination screen up?           -> done
-      2. Is a guide arrow visible?               -> tap below it
-      3. Otherwise                               -> next fallback point
-
-    Guides are tried in the order given, so listing green before yellow makes
-    the bot always act on the current instruction rather than the upcoming
-    one. The fallback points still cover plain dialogue, where no arrow is
-    drawn because a tap anywhere continues.
+    Green always comes first, because green marks the enemy to attack. After
+    that, each pass taps through the remaining candidates one per iteration,
+    ending with the fallback points. Tapping the wrong thing is free -- the
+    game ignores it -- while failing to tap the right thing hangs the account
+    until it times out, so cycling is the safe shape.
     """
     names = _targets(step)
     if not names:
@@ -267,17 +277,17 @@ def _act_tap_through(ctx: Context, step: Step) -> None:
 
     timeout = float(step.get("timeout", ctx.step_timeout))
     interval = float(step.get("interval", 0.8))
-    guide_region = _region(step)
+    stop_region = _region(step)
     deadline = time.monotonic() + timeout
     best = Match(found=False, score=0.0)
-    taps = guided = swept = 0
+    taps = guided = 0
 
     while time.monotonic() < deadline:
         screen = ctx.screen()
 
-        # 1. Are we there yet?
+        # Are we there yet?
         name, match = ctx.store.find_any(
-            screen, names, threshold=_threshold(ctx, step), region=guide_region
+            screen, names, threshold=_threshold(ctx, step), region=stop_region
         )
         if match.found and name:
             log.debug(
@@ -286,38 +296,34 @@ def _act_tap_through(ctx: Context, step: Step) -> None:
             return
         best = match if match.score > best.score else best
 
-        # 2. Follow the game's own pointer if it is drawing one.
-        acted = False
+        # Build this pass's candidates: everything the game is pointing at,
+        # then the fixed fallbacks.
+        candidates: list[tuple[int, int]] = []
         for guide in guides:
             if not ctx.store.has(guide["name"]):
                 continue
-            g = ctx.store.find(
+            hits = ctx.store.find_all(
                 screen,
                 guide["name"],
                 threshold=float(guide["threshold"] or _threshold(ctx, step)),
+                region=guide.get("region"),
+                max_hits=int(guide.get("max_hits") or 4),
+                color=bool(guide.get("color", True)),
             )
-            if g.found:
-                dx, dy = guide["offset"]
-                ctx.device.tap(g.center[0] + dx, g.center[1] + dy)
-                log.debug("tap_through followed %s at %s", guide["name"], g.center)
-                taps += 1
-                guided += 1
-                acted = True
-                break
+            dx, dy = guide["offset"]
+            candidates.extend((h.center[0] + dx, h.center[1] + dy) for h in hits)
+        guided += len(candidates)
+        candidates.extend(points)
 
-        # 3. Nothing pointed at anything -- fall back to the sweep.
-        if not acted:
-            ctx.device.tap(*points[swept % len(points)])
-            swept += 1
-            taps += 1
-
+        ctx.device.tap(*candidates[taps % len(candidates)])
+        taps += 1
         time.sleep(interval)
 
     if step.get("optional"):
         return
     raise StepTimeout(
         f"tap_through never reached {names} in {timeout:.0f}s after {taps} taps "
-        f"({guided} guided) (best score {best.score:.2f})"
+        f"(best score {best.score:.2f})"
     )
 
 

@@ -503,3 +503,52 @@ def test_a_guide_entry_without_a_target_is_rejected(ctx_factory):
         run_steps(ctx, steps([{
             "tap_through": {"target": "ui/badge", "guides": [{"offset": [0, 1]}]}
         }]))
+
+
+def test_tap_through_cycles_every_arrow_not_just_the_first(ctx_factory, arrows, badge):
+    """Two enemies can be green-arrowed at once, and the tutorial's own
+    instruction arrow is a third mark. Picking one and stopping stalls."""
+    green, _ = arrows
+    screen = make_screen()
+    stamp(screen, green, 300, 140)
+    stamp(screen, green, 700, 140)
+    dev = FakeDevice([screen] * 5 + [stamp(make_screen(), badge, 50, 50)])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge",
+            "guides": [{"target": "ui/arrow_green", "offset": [0, 128], "max_hits": 4}],
+            "points": [[0.949, 0.921]],
+            "interval": 0.01,
+        }
+    }]))
+    # Both arrows AND the fallback skill point must all get tapped.
+    assert (320, 293) in dev.taps
+    assert (720, 293) in dev.taps
+    assert (1214, 663) in dev.taps
+
+
+def test_a_guide_region_ignores_the_same_glyph_elsewhere(ctx_factory, arrows, badge):
+    """The yellow glyph over an enemy is turn-order noise; the same glyph low
+    on screen is the instruction. Only position tells them apart."""
+    _, yellow = arrows
+    screen = make_screen()
+    stamp(screen, yellow, 600, 40)     # top: decoration, must be ignored
+    stamp(screen, yellow, 900, 600)    # bottom: the real instruction
+    dev = FakeDevice([screen, stamp(make_screen(), badge, 50, 50)])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge",
+            "guides": [{
+                "target": "ui/arrow_yellow", "offset": [0, 95],
+                "region": [0.0, 0.6, 1.0, 0.4],
+            }],
+            "points": [[0.5, 0.889]],
+            "interval": 0.01,
+        }
+    }]))
+    assert dev.taps[0] == (920, 720)     # the low one, +95
+    assert (620, 160) not in dev.taps    # the top one, never
