@@ -1,0 +1,164 @@
+# Summoners War reroll flow.
+#
+# THIS FILE IS A STARTING POINT, NOT A FINISHED SCRIPT. The structure and the
+# actions are correct; the regions, templates and a few taps must be calibrated
+# against YOUR emulator before the loop will run clean. Work through the
+# "Calibration" section of the README with `swreroll phase <name>` -- it runs
+# exactly one phase at a time so you can fix a step without burning an account.
+#
+# Guiding principle: prefer `tap_text` over `tap`. Text buttons need no
+# captured images at all, which is most of what a tutorial skip has to click.
+
+package: com.com2us.smon.normal.freefull.google.kr.android.common
+
+defaults:
+  # Keeper list. `evaluate_names` OCRs the monster's name off the summon
+  # result and fuzzy-matches it against these. Adding a target is one line --
+  # no screenshot needed. Override at the command line with --want.
+  #
+  # VERIFY THIS LIST against a current source (swarfarm.com) before a long
+  # run; Com2uS keeps adding LD nat 5s and the roster has moved a lot.
+  wanted:
+    # Light
+    - Ariel
+    - Jeanne
+    - Vigor
+    - Eladriel
+    - Woosa
+    - Bastet
+    # Dark
+    - Beelzebub
+    - Zeratu
+
+order:
+  - launch
+  - tutorial
+  - popups
+  - collect
+  - summon
+  - evaluate
+  - reset
+
+phases:
+
+  # -----------------------------------------------------------------------
+  launch:
+    steps:
+      - start_app: {after: 6}
+      # The title screen is the first thing worth waiting on. Capture a crop
+      # of the "Touch to Start" text or the logo as templates/ui/title.png.
+      - wait_for:
+          target: ui/title
+          timeout: 120        # cold start on a fresh install pulls a patch
+          optional: true
+      - tap_through:
+          targets: [ui/tutorial_start]
+          at: [0.5, 0.85]
+          timeout: 90
+          optional: true
+
+  # -----------------------------------------------------------------------
+  # The opening is on rails: a scripted battle, a scripted first summon, and
+  # a lot of dialogue. Hammering through it is the single biggest time sink
+  # per account, so this is the phase worth optimising once it works.
+  tutorial:
+    steps:
+      - note: {text: "tutorial"}
+      # Each tap_through stops the moment it can see the next real screen,
+      # rather than sleeping a fixed number of seconds.
+      - tap_through:
+          targets: [ui/summon_altar, ui/battle_start]
+          at: [0.5, 0.85]
+          interval: 0.9
+          timeout: 240
+      - tap_text: {text: "Start", optional: true, timeout: 15}
+      - tap_through:
+          targets: [ui/home]
+          at: [0.5, 0.85]
+          interval: 0.9
+          timeout: 300
+
+  # -----------------------------------------------------------------------
+  # A brand-new account is buried in event banners, pack offers and attendance
+  # popups. Every PNG under templates/close/ is treated as a close button.
+  popups:
+    optional: true
+    steps:
+      - dismiss: {rounds: 10, interval: 0.7}
+      - back: {}
+      - dismiss: {rounds: 4, optional: true}
+
+  # -----------------------------------------------------------------------
+  # Sweep up everything free before summoning: mailbox, then the Summoner's
+  # Way achievement rewards, which is where the early scrolls actually are.
+  collect:
+    optional: true
+    steps:
+      - tap: {target: ui/mailbox, timeout: 30, optional: true}
+      - tap_text: {text: "Get All", optional: true, timeout: 12, after: 2}
+      - tap_text: {text: "OK", optional: true, timeout: 10}
+      - dismiss: {rounds: 6, optional: true}
+      - back: {}
+
+      - tap: {target: ui/summoners_way, timeout: 20, optional: true}
+      - repeat:
+          times: 6
+          steps:
+            - tap_text: {text: "Claim", optional: true, timeout: 6, after: 1.2}
+      - dismiss: {rounds: 6, optional: true}
+      - back: {}
+
+      # How many scrolls did we actually end up with? Logged per account, so
+      # after a hundred rerolls you know what a fresh account is really worth.
+      - read_number:
+          region: [0.78, 0.02, 0.14, 0.06]
+          into: crystals
+          optional: true
+
+  # -----------------------------------------------------------------------
+  summon:
+    steps:
+      - tap: {target: ui/summon_altar, timeout: 45}
+      - wait_for: {target: ui/summon_screen, timeout: 30}
+
+      # Pick the scroll type. Light & Darkness scrolls are the only fresh
+      # -account source of an LD 5-star, so they go first; swap the tab
+      # template if you want mystical scrolls instead.
+      - tap: {target: ui/scroll_ld, timeout: 20, optional: true}
+      - tap_text: {text: "Summon", timeout: 20, after: 1.5}
+      - tap_text: {text: "OK", optional: true, timeout: 8}
+
+      # The summon animation is long and unskippable early on. Tapping
+      # through it until the result panel is up beats guessing a duration.
+      - tap_through:
+          targets: [ui/summon_result]
+          at: [0.5, 0.9]
+          interval: 0.7
+          timeout: 90
+
+  # -----------------------------------------------------------------------
+  evaluate:
+    steps:
+      # Region is x, y, w, h as 0..1 fractions of the screen, covering the
+      # monster's NAME on the result panel. Tune it with:
+      #   swreroll ocr --region 0.30,0.62,0.40,0.10 --save crop.png
+      # and widen or tighten until the name comes back clean.
+      - evaluate_names:
+          region: [0.30, 0.62, 0.40, 0.10]
+          min_ratio: 0.82
+          save_misses: true
+
+      # Belt and braces: if you also dropped portrait crops into
+      # templates/keepers/, they are checked too. Either route can bank the
+      # account -- useful for a monster whose name OCRs badly.
+      - evaluate:
+          group: keepers
+          threshold: 0.88
+          optional: true
+
+  # -----------------------------------------------------------------------
+  # Only reached when nothing was worth keeping. The runner skips this phase
+  # entirely once ctx.keep is set, so a hit is never wiped.
+  reset:
+    steps:
+      - clear_data: {after: 3}

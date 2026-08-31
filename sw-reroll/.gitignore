@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Runtime artifacts
+runs/
+shots/
+*.jsonl
+*.log
+
+# Captured templates are per-user / per-emulator, keep the tree but not the pngs
+templates/**/*.png
+!templates/**/.gitkeep
