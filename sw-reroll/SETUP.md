@@ -65,10 +65,15 @@ Not on PATH and you'd rather not fix that? Pass it explicitly:
 
 ## 5. Connect MuMu
 
-**5a. Turn ADB on inside MuMu.** In MuMu Player: the **☰ menu** (top right) →
-**Settings** → **Other settings** → enable **ADB debugging** (sometimes
-"Allow ADB connection" / "Local connection"). Restart the instance after
-changing it.
+**5a. Turn ADB on inside MuMu.** Open **Device Settings** (the ☰ / gear icon
+in MuMu's toolbar) → **Developer options** in the left sidebar → set
+**ADB debug** to **"Enable local connection"**.
+
+"Local connection" is the one you want — it listens on 127.0.0.1, which is
+what `connect mumu` dials. `Enable root` is unrelated and can be left alone.
+
+If you had to change the setting, restart the instance. If it was already set,
+carry straight on.
 
 **5b. Find MuMu's adb.exe.** It ships one, so you don't need Android
 platform-tools:
@@ -104,7 +109,8 @@ Expected:
 - Read the real port off MuMu's **Multi-Instance Manager** — it shows one per
   instance — then connect by hand:
   `& $ADB connect 127.0.0.1:<port>`
-- Re-check that ADB debugging is enabled (5a) and restart the instance.
+- Re-check ADB debug is on "Enable local connection" (5a), and restart the
+  instance if you just changed it.
 
 **5d. More instances.** `-n 4` connects instances 0–3. This is the only real
 throughput lever: 4 instances turns a ~2-day expectation into ~2 hours.
