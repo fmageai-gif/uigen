@@ -74,16 +74,17 @@ phases:
   tutorial:
     steps:
       - note: {text: "tutorial"}
-      # Each tap_through stops the moment it can see the next real screen,
-      # rather than sleeping a fixed number of seconds.
       # The opening is ON RAILS: the game accepts a tap only on whatever it
-      # is currently highlighting -- and it TELLS YOU WHAT THAT IS. A green
-      # arrow marks the thing to tap now; a yellow one marks what comes next.
+      # is currently highlighting. It does mark that -- but the marks are
+      # ambiguous, so nothing here tries to pick THE right one.
       #
-      # So follow the arrows instead of guessing coordinates. Green is listed
-      # first, so the bot always acts on the current instruction rather than
-      # the upcoming one. The fallback `points` only run when no arrow is on
-      # screen, which is the plain-dialogue case where a tap anywhere works.
+      # Each pass taps one candidate: below every arrow found, then through
+      # the fixed points. A tap on the wrong thing is free (the game ignores
+      # it); a missed tap hangs the account until timeout. So cycling is the
+      # safe shape, and the ordering below is only about what is commonest.
+      #
+      # tap_through stops the instant it can see the next real screen, so a
+      # slow patch or a laggy server costs seconds, not a broken run.
       #
       # The arrow floats above its target's head, hence the downward offset.
       # Measured from a real capture: arrow centre y=105, enemy body y=233,
