@@ -99,6 +99,9 @@ monster whose name OCRs badly.
 
 ## Install
 
+**On Windows with MuMu?** [SETUP.md](SETUP.md) walks the whole thing from
+installing Python to a calibrated bot, step by step.
+
 ```bash
 cd sw-reroll
 pip install -e .            # or: pip install -r requirements.txt
