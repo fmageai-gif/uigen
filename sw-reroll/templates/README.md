@@ -43,6 +43,16 @@ Grade detection needs only these, and they decide every keep:
   If two element icons score similarly on the same screen, tighten both crops
   until they don't.
 
+## Do not cut templates from a MuMu *window* screenshot
+
+MuMu draws its key-mapping hints — the faint `1 2 3` bottom-right and
+`` ` X Z `` bottom-left — as a host overlay on top of the game. They show up in
+window screenshots but are **not** in an `adb screencap`, because adb reads the
+Android framebuffer underneath.
+
+So a crop taken from a window screenshot can contain pixels the bot will never
+see, and will match badly or not at all. Always cut from `swreroll shot`.
+
 ## The tutorial guide arrows
 
 The game tells you what to tap: a **green arrow** floats over the thing to tap
@@ -61,6 +71,8 @@ likely stall on the scripted battle turns.
 
 ## Names the shipped flow expects
 
+- `ui/skip` — the SKIP button, bottom-right on cutscenes. Cut just the word
+  on its dark backdrop; it always ends the cutscene early
 - `ui/title` — the title / "Touch to Start" screen
 - `ui/tutorial_start` — first real screen after the title
 - `ui/home` — the town/home screen, i.e. "tutorial is over"
@@ -71,5 +83,7 @@ likely stall on the scripted battle turns.
 - `ui/summon_result` — the panel showing what you pulled
 - `ui/mailbox`, `ui/summoners_way` — reward sources
 - `ui/battle_start` — used only to detect the scripted tutorial fight
+- `ui/victory` — the "VICTORY" banner. A clean end-of-battle waypoint: it is
+  large, high-contrast, and identical every time
 
 Rename them freely; the flow file is the only thing that refers to them.

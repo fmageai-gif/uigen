@@ -103,6 +103,10 @@ phases:
             # it is decoration: the next-turn marker over an enemy, or the
             # pointer on the boss HP bar. Hence the bottom-40% scope.
             - {target: ui/arrow_yellow, offset: [0, 95], region: [0.0, 0.6, 1.0, 0.4]}
+            # SKIP appears on every cutscene and always ends it early. Matched
+            # rather than fixed-tapped so it is still found if a cutscene puts
+            # it somewhere else. Optional -- the fixed point below covers it.
+            - {target: ui/skip, offset: [0, 0], region: [0.7, 0.8, 0.3, 0.2]}
           points:
             # SKILL 3 FIRST, THEN 2, THEN 1. Skill 3 is the strongest and is
             # what you want whenever it is off cooldown; a tap on a cooling
@@ -111,9 +115,17 @@ phases:
             #
             # Note the skill bar belongs to whichever monster is acting, so
             # the icons change between turns -- only the positions are fixed.
+            # Dialogue comes first and again mid-cycle: the tutorial is
+            # mostly talking, and every dialogue box just needs tapping until
+            # it goes away. Off-target taps are free -- during a battle this
+            # lands on empty ground, during dialogue the skill taps do
+            # nothing -- so the ordering is purely about which is commonest.
+            - [0.965, 0.961]  # SKIP -- cutscenes only, always worth tapping
+            - [0.495, 0.889]  # dialogue box
             - [0.949, 0.921]  # skill 3  <- preferred
             - [0.848, 0.921]  # skill 2
             - [0.747, 0.921]  # skill 1
+            - [0.495, 0.889]  # dialogue box again
             # Enemy positions, for when nothing carries a green arrow -- once
             # the adds are dead only a boss remains, and the arrow that marks
             # it sits high on screen where the yellow guide deliberately does
@@ -121,7 +133,6 @@ phases:
             - [0.466, 0.404]  # centre / boss
             - [0.335, 0.323]  # left enemy
             - [0.530, 0.323]  # right enemy
-            - [0.495, 0.889]  # dialogue box -- advances "tap to continue"
           interval: 0.6
           timeout: 300
       - tap_text: {text: "Start", optional: true, timeout: 15}
@@ -132,14 +143,20 @@ phases:
             # multiple hits and cycle through all of them.
             - {target: ui/arrow_green, offset: [0, 128], region: [0.0, 0.0, 1.0, 0.5], max_hits: 4}
             - {target: ui/arrow_yellow, offset: [0, 95], region: [0.0, 0.6, 1.0, 0.4]}
+            # SKIP appears on every cutscene and always ends it early. Matched
+            # rather than fixed-tapped so it is still found if a cutscene puts
+            # it somewhere else. Optional -- the fixed point below covers it.
+            - {target: ui/skip, offset: [0, 0], region: [0.7, 0.8, 0.3, 0.2]}
           points:
+            - [0.965, 0.961]  # SKIP -- cutscenes only, always worth tapping
+            - [0.495, 0.889]  # dialogue box
             - [0.949, 0.921]  # skill 3  <- preferred
             - [0.848, 0.921]  # skill 2
             - [0.747, 0.921]  # skill 1
+            - [0.495, 0.889]  # dialogue box again
             - [0.466, 0.404]  # centre / boss
             - [0.335, 0.323]  # left enemy
             - [0.530, 0.323]  # right enemy
-            - [0.495, 0.889]  # dialogue
           interval: 0.6
           timeout: 360
 
