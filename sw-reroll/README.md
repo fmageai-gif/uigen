@@ -24,25 +24,40 @@ And the arithmetic, before you spend a weekend on it:
 
 ## How it decides what to keep
 
-Two independent routes, and either one banks an account:
+Three routes, any of which banks an account. **For "any LD nat 5" — the
+default — use grade detection, not names.**
 
-**By name (OCR — preferred).** Tesseract reads the monster's name off the
-summon result and fuzzy-matches it against a wanted list. Fuzzy because
-stylised game fonts make Tesseract swap glyphs in predictable ways — `B`→`8`,
-`l`→`1`, `S`→`5` — which the matcher folds together before comparing. Adding a
-target is one line of YAML.
+**By grade (default).** Counts the star glyphs on the result panel and reads
+the element icon. "Five stars and light-or-dark" banks the account *whoever
+the monster is*. This is strictly better than a name roster for your goal: it
+keeps working the day Com2uS releases an LD5 nobody has heard of, and it never
+depends on OCR reading a stylised name correctly.
 
 ```yaml
-defaults:
-  wanted: [Ariel, Jeanne, Vigor, Beelzebub, Zeratu]
+- evaluate_grade:
+    star_region: [0.30, 0.70, 0.40, 0.09]
+    min_stars: 5
+    elements: {light: ui/elem_light, dark: ui/elem_dark}
+    keep_elements: [light, dark]
 ```
+
+Three small templates total — one star, two element icons — and you are done.
+
+A nat 5 that *isn't* a keeper (a fire/water/wind pull from a mystical scroll)
+is recorded as a note rather than a keep, so `swreroll stats` shows what those
+extra minutes are actually buying.
+
+**By name (OCR).** For a specific shortlist rather than any LD5. Tesseract
+reads the monster's name and fuzzy-matches it against a wanted list — fuzzy
+because stylised game fonts make Tesseract swap glyphs predictably (`B`→`8`,
+`l`→`1`, `S`→`5`), which the matcher folds together before comparing.
+
 ```bash
 swreroll run --want Ariel --want Beelzebub
 ```
 
 **By image.** Drop a portrait crop into `templates/keepers/`. Useful for a
-monster whose name OCRs badly, or for matching a 5★ dark frame rather than a
-specific monster.
+monster whose name OCRs badly.
 
 ## Install
 
@@ -63,14 +78,31 @@ Two external binaries:
 ## Connect the emulator
 
 ```bash
-adb connect 127.0.0.1:5555     # LDPlayer instance 0; ports usually step by 2
+swreroll connect mumu -n 4      # MuMu Player 12: ports 16384, +32 per instance
 swreroll devices
 ```
 
 ```
-127.0.0.1:5555     1280x720   LDPlayer
-127.0.0.1:5557     1280x720   LDPlayer
+127.0.0.1:16384    1280x720   MuMu
+127.0.0.1:16416    1280x720   MuMu
 ```
+
+Known port patterns, in case you need to connect by hand:
+
+| Emulator | Base port | Stride |
+|---|---|---|
+| `mumu` — MuMu Player 12 | 16384 | +32 |
+| `mumu6` — MuMu 6 / Nebula | 7555 | +1 |
+| `ldplayer` | 5555 | +2 |
+| `bluestacks` | 5555 | +10 |
+| `nox` | 62001 | +24 |
+
+If nothing connects: check the instances are running, that ADB is enabled in
+the emulator's settings, and read the actual port off MuMu's **Multi-Instance
+Manager** — it displays it per instance.
+
+MuMu's adb binary lives at `MuMuPlayer-12.0/shell/adb.exe`; pass it with
+`--adb` if platform-tools isn't on your PATH.
 
 Confirm the package id — it differs between stores:
 
@@ -126,26 +158,53 @@ the name.
 `swreroll ocr --words` lists every word with its box, which is how you find a
 region in the first place.
 
-**5. Run one phase at a time.** No account is burned; nothing is wiped.
+**5. Cut the grade templates.** These are the three that decide everything:
+
+```bash
+swreroll shot --crop 512,505,30,30 --out templates/ui/star.png
+swreroll shot --crop 592,412,44,44 --out templates/ui/elem_light.png
+swreroll shot --crop 592,412,44,44 --out templates/ui/elem_dark.png
+```
+
+Then verify the count on a known result screen — five stars must read as
+exactly five, never four or six:
+
+```bash
+swreroll phase summon_ld -v
+```
+```
+INFO  grade: 5 stars, element=dark
+```
+
+If it miscounts, tighten `star_region` in the flow so it covers only the star
+row, and recut `star.png` from a single clean star with no neighbours.
+
+**6. Run one phase at a time.** No account is burned; nothing is wiped.
 
 ```bash
 swreroll phase launch
-swreroll phase summon
-swreroll phase evaluate
+swreroll phase summon_ld
 ```
 
 ## Run it
 
 ```bash
-# One device, stop at the first keeper
-swreroll run --want Ariel --want Beelzebub
+# Every connected instance, stop each at its first LD5
+swreroll run
 
-# Every connected instance, overnight, capped
+# Overnight, capped
 swreroll run --max-accounts 500 --max-keeps 1
+
+# A specific shortlist instead of any LD5 (switch the flow to evaluate_names)
+swreroll run --want Ariel --want Beelzebub
 
 # Rehearse without sending a single tap
 swreroll run --dry-run -v
 ```
+
+Four MuMu instances at ~14 accounts/hour each is ~56/hour, which puts a
+70-100 account expectation at **roughly 1.5-2 hours** rather than a weekend.
+Instance count is the only lever that really matters here.
 
 Progress is logged per account:
 
@@ -188,6 +247,7 @@ Com2uS reshuffles a menu.
 | `wait_for_text` | Block until a phrase is legible |
 | `dismiss` | Close every popup matching `templates/close/`, repeatedly |
 | `read_text` / `read_number` | OCR a region into a named variable |
+| `evaluate_grade` | Keeper check by star count + element — the default |
 | `evaluate_names` | Keeper check by OCR'd monster name |
 | `evaluate` | Keeper check by template match |
 | `if_found` / `repeat` | Branching and loops |
@@ -212,7 +272,9 @@ need no captured images at all, which is most of what a tutorial skip clicks.
 Phases are ordered, and `reset` is last. **The runner skips `reset` entirely
 once a keeper is found**, so a hit is never wiped — there's a test pinning that
 specific behaviour, because it's the one bug that would make the whole tool
-worse than useless.
+worse than useless. A flow can list other phases under `skip_on_keep`; the
+shipped one lists `summon_mystical`, since once you have the LD5 there is
+nothing left for mystical scrolls to win.
 
 Steps wait for the screen they expect rather than sleeping a fixed duration, so
 a slow patch download or a laggy server costs seconds, not a broken run. Taps
@@ -233,10 +295,10 @@ swreroll/
   ocr.py      tesseract wrapper, preprocessing, fuzzy name matching
   flow.py     the step interpreter
   runner.py   parallel orchestration, keeper safety, result logging
-  cli.py      devices / shot / check / ocr / phase / run / stats
+  cli.py      connect / devices / shot / check / ocr / phase / run / stats
 flows/        the reroll script (edit this)
 templates/    your captured crops (not committed)
-tests/        70 tests, no emulator required
+tests/        89 tests, no emulator required
 ```
 
 ```bash

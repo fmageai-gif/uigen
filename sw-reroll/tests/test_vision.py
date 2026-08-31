@@ -6,6 +6,7 @@ from swreroll.vision import (
     REFERENCE_WIDTH,
     TemplateError,
     TemplateStore,
+    find_all,
     find_template,
     normalise,
 )
@@ -79,3 +80,42 @@ def test_find_any_returns_the_matching_name(store, badge, tmp_path):
     name, match = store.find_any(make_screen(), ["ui/other", "ui/badge"], threshold=0.9)
     assert name is None
     assert not match.found
+
+
+# ---- multi-match ---------------------------------------------------------
+
+def test_find_all_counts_repeated_icons(badge):
+    """Counting star glyphs is how grade is read without knowing the name."""
+    screen = make_screen()
+    for i in range(5):
+        stamp(screen, badge, 300 + i * 100, 400)
+
+    hits = find_all(screen, badge, threshold=0.9)
+    assert len(hits) == 5
+    # Returned left-to-right.
+    assert [h.rect[0] for h in hits] == sorted(h.rect[0] for h in hits)
+
+
+def test_find_all_suppresses_overlapping_detections(badge):
+    """One icon must never be counted twice."""
+    screen = stamp(make_screen(), badge, 500, 300)
+    assert len(find_all(screen, badge, threshold=0.9)) == 1
+
+
+def test_find_all_respects_a_region(badge):
+    screen = make_screen()
+    stamp(screen, badge, 100, 100)   # outside
+    stamp(screen, badge, 700, 500)   # inside
+    hits = find_all(screen, badge, threshold=0.9, region=(0.5, 0.5, 0.5, 0.5))
+    assert len(hits) == 1
+
+
+def test_find_all_returns_nothing_when_absent(badge):
+    assert find_all(make_screen(), badge, threshold=0.9) == []
+
+
+def test_find_all_honours_max_hits(badge):
+    screen = make_screen()
+    for i in range(6):
+        stamp(screen, badge, 100 + i * 100, 300)
+    assert len(find_all(screen, badge, threshold=0.9, max_hits=3)) == 3

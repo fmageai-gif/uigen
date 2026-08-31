@@ -12,31 +12,35 @@
 package: com.com2us.smon.normal.freefull.google.kr.android.common
 
 defaults:
-  # Keeper list. `evaluate_names` OCRs the monster's name off the summon
-  # result and fuzzy-matches it against these. Adding a target is one line --
-  # no screenshot needed. Override at the command line with --want.
+  # This flow keeps by GRADE, not by name: `evaluate_grade` counts the star
+  # glyphs and reads the element icon, so "5 stars and light-or-dark" banks
+  # the account whoever the monster is. That never goes stale when Com2uS
+  # adds an LD5, and it does not depend on OCR reading a stylised name.
   #
-  # VERIFY THIS LIST against a current source (swarfarm.com) before a long
-  # run; Com2uS keeps adding LD nat 5s and the roster has moved a lot.
+  # `wanted` below is only used if you switch to `evaluate_names` -- useful
+  # when you want a specific shortlist rather than any LD5. Verify it against
+  # swarfarm.com first; the LD roster has grown a lot.
   wanted:
-    # Light
     - Ariel
     - Jeanne
     - Vigor
-    - Eladriel
-    - Woosa
-    - Bastet
-    # Dark
     - Beelzebub
     - Zeratu
+
+  # Phases to skip once the account is already a keeper. `reset` and `wipe`
+  # are always protected; mystical scrolls are listed here because once you
+  # have your LD5 there is nothing left for them to win.
+  skip_on_keep:
+    - summon_mystical
 
 order:
   - launch
   - tutorial
   - popups
   - collect
-  - summon
-  - evaluate
+  - summon_ld
+  # Delete the next line to skip mystical scrolls -- they cannot roll an LD5.
+  - summon_mystical
   - reset
 
 phases:
@@ -116,45 +120,80 @@ phases:
           optional: true
 
   # -----------------------------------------------------------------------
-  summon:
+  # Light & Darkness scrolls first. These are the ONLY fresh-account source
+  # of an LD 5-star, so they are the ones that can actually end the run.
+  summon_ld:
+    optional: true
     steps:
       - tap: {target: ui/summon_altar, timeout: 45}
       - wait_for: {target: ui/summon_screen, timeout: 30}
+      - tap: {target: ui/scroll_ld, timeout: 20}
 
-      # Pick the scroll type. Light & Darkness scrolls are the only fresh
-      # -account source of an LD 5-star, so they go first; swap the tab
-      # template if you want mystical scrolls instead.
-      - tap: {target: ui/scroll_ld, timeout: 20, optional: true}
-      - tap_text: {text: "Summon", timeout: 20, after: 1.5}
-      - tap_text: {text: "OK", optional: true, timeout: 8}
-
-      # The summon animation is long and unskippable early on. Tapping
-      # through it until the result panel is up beats guessing a duration.
-      - tap_through:
-          targets: [ui/summon_result]
-          at: [0.5, 0.9]
-          interval: 0.7
-          timeout: 90
+      # Burn every LD scroll the account has. `optional` on the inner steps
+      # means the loop simply stops finding a Summon button once they run out.
+      - repeat:
+          times: 4
+          steps:
+            - tap_text: {text: "Summon", optional: true, timeout: 12, after: 1.5}
+            - tap_text: {text: "OK", optional: true, timeout: 6}
+            - tap_through:
+                targets: [ui/summon_result]
+                at: [0.5, 0.9]
+                interval: 0.7
+                timeout: 90
+                optional: true
+            - evaluate_grade:
+                star_template: ui/star
+                star_region: [0.30, 0.70, 0.40, 0.09]
+                min_stars: 5
+                element_region: [0.44, 0.55, 0.12, 0.10]
+                elements:
+                  light: ui/elem_light
+                  dark: ui/elem_dark
+                keep_elements: [light, dark]
+                threshold: 0.86
+                save_notable: true
+            - tap: {at: [0.5, 0.92]}     # dismiss the result panel
+      - back: {}
 
   # -----------------------------------------------------------------------
-  evaluate:
+  # Mystical scrolls. NOTE: these can never produce a Light or Dark monster,
+  # so under a "keep any LD5" rule they cannot end the run -- they only cost
+  # time. `evaluate_grade` still logs any nat 5 they produce (as a note, not
+  # a keep) so you can see what the extra minutes are actually buying.
+  # Delete this phase from `order` to reclaim that time.
+  summon_mystical:
+    optional: true
     steps:
-      # Region is x, y, w, h as 0..1 fractions of the screen, covering the
-      # monster's NAME on the result panel. Tune it with:
-      #   swreroll ocr --region 0.30,0.62,0.40,0.10 --save crop.png
-      # and widen or tighten until the name comes back clean.
-      - evaluate_names:
-          region: [0.30, 0.62, 0.40, 0.10]
-          min_ratio: 0.82
-          save_misses: true
-
-      # Belt and braces: if you also dropped portrait crops into
-      # templates/keepers/, they are checked too. Either route can bank the
-      # account -- useful for a monster whose name OCRs badly.
-      - evaluate:
-          group: keepers
-          threshold: 0.88
-          optional: true
+      - tap: {target: ui/summon_altar, timeout: 45}
+      - wait_for: {target: ui/summon_screen, timeout: 30}
+      - tap: {target: ui/scroll_mystical, timeout: 20}
+      - repeat:
+          times: 3
+          steps:
+            - tap_text: {text: "Summon", optional: true, timeout: 12, after: 1.5}
+            - tap_text: {text: "OK", optional: true, timeout: 6}
+            - tap_through:
+                targets: [ui/summon_result]
+                at: [0.5, 0.9]
+                interval: 0.7
+                timeout: 90
+                optional: true
+            - evaluate_grade:
+                star_template: ui/star
+                star_region: [0.30, 0.70, 0.40, 0.09]
+                min_stars: 5
+                element_region: [0.44, 0.55, 0.12, 0.10]
+                elements:
+                  light: ui/elem_light
+                  dark: ui/elem_dark
+                # Mystical scrolls cannot roll light or dark, so this keeps
+                # nothing -- it records the nat 5s for the stats only.
+                keep_elements: [light, dark]
+                threshold: 0.86
+                save_notable: true
+            - tap: {at: [0.5, 0.92]}
+      - back: {}
 
   # -----------------------------------------------------------------------
   # Only reached when nothing was worth keeping. The runner skips this phase

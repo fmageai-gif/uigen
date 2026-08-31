@@ -1,5 +1,6 @@
 """The interpreter, exercised against a fake device -- no adb, no emulator."""
 
+import numpy as np
 import pytest
 
 from swreroll.config import Flow, Phase, as_steps
@@ -166,3 +167,98 @@ def test_ocr_step_without_an_engine_fails_loudly(ctx_factory):
     ctx = ctx_factory(FakeDevice())
     with pytest.raises(ConfigError, match="OCR"):
         run_steps(ctx, steps([{"read_text": {"region": [0, 0, 1, 1]}}]))
+
+
+# ---- grade-based keeper detection ----------------------------------------
+#
+# "Any LD nat 5" is decided by counting stars and reading the element icon,
+# which is why these are the tests that actually protect the run.
+
+def _grade_store(tmp_path, star, light, dark):
+    import cv2
+    for name, img in (("ui/star", star), ("ui/elem_light", light), ("ui/elem_dark", dark)):
+        cv2.imwrite(str(tmp_path / f"{name}.png"), img)
+
+
+@pytest.fixture
+def glyphs():
+    rng = np.random.default_rng(2024)
+    star = rng.integers(0, 255, (30, 30, 3), dtype=np.uint8)
+    light = rng.integers(0, 255, (44, 44, 3), dtype=np.uint8)
+    dark = rng.integers(0, 255, (44, 44, 3), dtype=np.uint8)
+    return star, light, dark
+
+
+def _result_screen(star, elem, n_stars):
+    screen = make_screen()
+    for i in range(n_stars):
+        stamp(screen, star, 400 + i * 60, 520)
+    if elem is not None:
+        stamp(screen, elem, 600, 420)
+    return screen
+
+
+GRADE_STEP = {
+    "star_template": "ui/star",
+    "star_region": [0.25, 0.65, 0.50, 0.12],
+    "element_region": [0.35, 0.50, 0.30, 0.15],
+    "elements": {"light": "ui/elem_light", "dark": "ui/elem_dark"},
+    "keep_elements": ["light", "dark"],
+    "threshold": 0.9,
+}
+
+
+def test_five_stars_and_a_dark_element_is_a_keeper(ctx_factory, store, tmp_path, glyphs):
+    star, light, dark = glyphs
+    _grade_store(tmp_path, star, light, dark)
+    ctx = ctx_factory(FakeDevice([_result_screen(star, dark, 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(GRADE_STEP)}]))
+
+    assert ctx.keep is True
+    assert ctx.vars["stars"] == 5
+    assert ctx.vars["element"] == "dark"
+    assert ctx.hits == ["5star-dark"]
+
+
+def test_five_stars_and_a_light_element_is_a_keeper(ctx_factory, store, tmp_path, glyphs):
+    star, light, dark = glyphs
+    _grade_store(tmp_path, star, light, dark)
+    ctx = ctx_factory(FakeDevice([_result_screen(star, light, 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(GRADE_STEP)}]))
+    assert ctx.keep is True
+    assert ctx.vars["element"] == "light"
+
+
+def test_a_four_star_is_not_a_keeper(ctx_factory, store, tmp_path, glyphs):
+    star, light, dark = glyphs
+    _grade_store(tmp_path, star, light, dark)
+    ctx = ctx_factory(FakeDevice([_result_screen(star, dark, 4)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(GRADE_STEP)}]))
+
+    assert ctx.keep is False
+    assert ctx.vars["stars"] == 4
+    assert ctx.notes == []  # only nat 5s are worth noting
+
+
+def test_a_nat_five_of_the_wrong_element_is_logged_but_not_kept(
+    ctx_factory, store, tmp_path, glyphs
+):
+    """A mystical-scroll nat 5 must be recorded without ending the run."""
+    star, light, dark = glyphs
+    _grade_store(tmp_path, star, light, dark)
+    #  Five stars, no light/dark icon anywhere -- i.e. a fire/water/wind nat 5.
+    ctx = ctx_factory(FakeDevice([_result_screen(star, None, 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(GRADE_STEP)}]))
+
+    assert ctx.keep is False
+    assert ctx.hits == []
+    assert ctx.notes == ["nat5-unknown"]
+
+
+def test_min_stars_is_configurable(ctx_factory, store, tmp_path, glyphs):
+    star, light, dark = glyphs
+    _grade_store(tmp_path, star, light, dark)
+    step = dict(GRADE_STEP, min_stars=4)
+    ctx = ctx_factory(FakeDevice([_result_screen(star, dark, 4)]))
+    run_steps(ctx, steps([{"evaluate_grade": step}]))
+    assert ctx.keep is True

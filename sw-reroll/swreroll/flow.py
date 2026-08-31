@@ -368,6 +368,68 @@ def _act_evaluate(ctx: Context, step: Step) -> None:
         ctx.save_shot("miss", screen)
 
 
+@action("evaluate_grade")
+def _act_evaluate_grade(ctx: Context, step: Step) -> None:
+    """Keeper check by natural grade and element, not by name.
+
+    For "any LD nat 5" this is strictly better than a name roster: it counts
+    the star glyphs and reads the element icon, so it keeps working when
+    Com2uS releases a Light/Dark monster nobody has heard of yet, and it never
+    depends on OCR reading a stylised name correctly.
+    """
+    star = str(step.get("star_template", "ui/star"))
+    min_stars = int(step.get("min_stars", 5))
+    star_region = step.get("star_region")
+    if star_region is not None:
+        star_region = tuple(float(v) for v in star_region)
+
+    screen = ctx.screen()
+    threshold = _threshold(ctx, step)
+
+    stars = ctx.store.find_all(
+        screen, star, threshold=threshold, region=star_region, max_hits=8
+    )
+    count = len(stars)
+    ctx.vars["stars"] = count
+
+    elements = step.get("elements") or {}
+    elem_region = step.get("element_region")
+    if elem_region is not None:
+        elem_region = tuple(float(v) for v in elem_region)
+
+    element = None
+    if elements:
+        best_score = 0.0
+        for label, tpl in elements.items():
+            m = ctx.store.find(screen, str(tpl), threshold=threshold, region=elem_region)
+            if m.found and m.score > best_score:
+                element, best_score = str(label), m.score
+    ctx.vars["element"] = element
+
+    keep_elements = [str(e) for e in (step.get("keep_elements") or [])]
+    log.info("grade: %d stars, element=%s", count, element)
+
+    ok_stars = count >= min_stars
+    ok_element = (not keep_elements) or (element in keep_elements)
+
+    if ok_stars and ok_element:
+        ctx.keep = True
+        tag = f"{count}star-{element or 'unknown'}"
+        ctx.hits.append(tag)
+        log.warning("KEEPER by grade: %s", tag)
+        ctx.save_shot("KEEP")
+        return
+
+    # A nat 5 that is not a keeper is still worth recording -- it is the only
+    # way to know whether the mystical scrolls are earning their time.
+    if ok_stars:
+        ctx.notes.append(f"nat{count}-{element or 'unknown'}")
+        if step.get("save_notable"):
+            ctx.save_shot(f"nat{count}-{element or 'unknown'}")
+    elif step.get("save_misses"):
+        ctx.save_shot("miss")
+
+
 @action("if_found")
 def _act_if_found(ctx: Context, step: Step) -> None:
     names = _targets(step)

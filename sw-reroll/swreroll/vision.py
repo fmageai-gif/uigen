@@ -125,6 +125,64 @@ def find_template(
     return best
 
 
+def find_all(
+    screen: np.ndarray,
+    template: np.ndarray,
+    threshold: float = 0.85,
+    region: tuple[float, float, float, float] | None = None,
+    max_hits: int = 20,
+) -> list[Match]:
+    """Every distinct occurrence of a template, not just the best one.
+
+    Counting repeated icons is how you read a monster's grade without knowing
+    its name: five star glyphs on the result panel means a natural 5-star,
+    whoever it turns out to be. That matters because a name roster goes stale
+    the moment Com2uS releases another Light/Dark monster, while "five stars
+    and a dark element icon" stays true forever.
+
+    Overlapping detections are suppressed so one star is never counted twice.
+    """
+    norm, factor = normalise(screen)
+    haystack_full = _to_gray(norm)
+    haystack, (off_x, off_y) = _crop_region(haystack_full, region)
+    needle = _to_gray(template)
+
+    th, tw = needle.shape[:2]
+    if th > haystack.shape[0] or tw > haystack.shape[1]:
+        return []
+
+    result = cv2.matchTemplate(haystack, needle, cv2.TM_CCOEFF_NORMED)
+    ys, xs = np.where(result >= threshold)
+    candidates = sorted(
+        ((float(result[y, x]), int(x), int(y)) for y, x in zip(ys, xs)),
+        reverse=True,
+    )
+
+    kept: list[Match] = []
+    for score, x, y in candidates:
+        if len(kept) >= max_hits:
+            break
+        # Non-max suppression: reject anything overlapping an accepted hit.
+        if any(
+            abs(x * factor - k.rect[0]) < tw * factor * 0.6
+            and abs(y * factor - k.rect[1]) < th * factor * 0.6
+            for k in kept
+        ):
+            continue
+        dx = (x + off_x) * factor
+        dy = (y + off_y) * factor
+        kept.append(
+            Match(
+                found=True,
+                score=score,
+                center=(int(dx + tw * factor / 2), int(dy + th * factor / 2)),
+                rect=(int(dx), int(dy), int(tw * factor), int(th * factor)),
+            )
+        )
+    # Left-to-right reads more naturally when debugging a star row.
+    return sorted(kept, key=lambda m: m.rect[0])
+
+
 @dataclass
 class TemplateStore:
     """Lazily loads and caches reference crops from a directory tree.
@@ -172,6 +230,9 @@ class TemplateStore:
 
     def find(self, screen: np.ndarray, name: str, threshold: float = 0.85, **kw) -> Match:
         return find_template(screen, self.get(name), threshold=threshold, **kw)
+
+    def find_all(self, screen: np.ndarray, name: str, threshold: float = 0.85, **kw) -> list[Match]:
+        return find_all(screen, self.get(name), threshold=threshold, **kw)
 
     def find_any(
         self, screen: np.ndarray, names: list[str], threshold: float = 0.85, **kw

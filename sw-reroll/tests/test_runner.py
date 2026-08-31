@@ -142,3 +142,60 @@ def test_cli_wanted_list_overrides_flow_defaults(tmp_path):
     flow.defaults["wanted"] = ["Ariel"]
     build_runner(tmp_path, flow, wanted=["Beelzebub", "Zeratu"])
     assert flow.defaults["wanted"] == ["Beelzebub", "Zeratu"]
+
+
+def test_skip_on_keep_phases_are_skipped_but_others_still_run(tmp_path, monkeypatch):
+    """A keeper must not spend more minutes on scrolls that cannot improve it."""
+    import swreroll.runner as runnermod
+
+    flow = Flow(
+        package="com.example.game",
+        phases={
+            "summon_ld": Phase(name="summon_ld", steps=as_steps([{"back": {}}], "t")),
+            "summon_mystical": Phase(
+                name="summon_mystical", steps=as_steps([{"back": {}}], "t")
+            ),
+            "reset": Phase(
+                name="reset", steps=as_steps([{"clear_data": {"after": 0}}], "t")
+            ),
+        },
+        order=["summon_ld", "summon_mystical", "reset"],
+        defaults={"skip_on_keep": ["summon_mystical"]},
+    )
+    runner = build_runner(tmp_path, flow)
+    dev = FakeDevice()
+
+    real = runnermod.run_phase
+    ran = []
+
+    def patched(ctx, phase):
+        ran.append(phase.name)
+        out = real(ctx, phase)
+        if phase.name == "summon_ld":
+            ctx.keep = True
+            ctx.hits.append("5star-dark")
+        return out
+
+    monkeypatch.setattr(runnermod, "run_phase", patched)
+    result = runner._run_account(dev, 1)
+
+    assert result.keep is True
+    assert ran == ["summon_ld"]                       # both later phases skipped
+    assert ("clear", "com.example.game") not in dev.calls
+
+
+def test_grade_vars_reach_the_result_row(tmp_path, monkeypatch):
+    import swreroll.runner as runnermod
+
+    runner = build_runner(tmp_path, build_flow())
+    real = runnermod.run_phase
+
+    def patched(ctx, phase):
+        out = real(ctx, phase)
+        if phase.name == "evaluate":
+            ctx.vars.update({"stars": 5, "element": "dark"})
+        return out
+
+    monkeypatch.setattr(runnermod, "run_phase", patched)
+    result = runner._run_account(FakeDevice(), 1)
+    assert result.vars == {"stars": 5, "element": "dark"}

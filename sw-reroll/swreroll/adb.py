@@ -181,3 +181,45 @@ class AdbDevice:
         out = self.shell("dumpsys", "window", "displays")
         m = re.search(r"mCurrentFocus=.*\s([\w.]+)/", out)
         return m.group(1) if m else ""
+
+
+# Default ADB endpoints per emulator. Ports step by a fixed stride for each
+# extra instance, which is what makes multi-instance rerolling scriptable.
+#   MuMu Player 12 : 16384, +32   (MuMu 6 / Nebula used 7555)
+#   LDPlayer       : 5555,  +2
+#   BlueStacks     : 5555,  +10
+#   Nox            : 62001, +24
+EMULATOR_PORTS: dict[str, tuple[int, int]] = {
+    "mumu": (16384, 32),
+    "mumu6": (7555, 1),
+    "ldplayer": (5555, 2),
+    "bluestacks": (5555, 10),
+    "nox": (62001, 24),
+}
+
+
+def connect(host_port: str, adb_path: str = "adb") -> bool:
+    """`adb connect`. True if the endpoint is now attached."""
+    try:
+        out = _run([resolve_adb(adb_path), "connect", host_port], timeout=20)
+    except AdbError:
+        return False
+    lowered = out.lower()
+    return "connected" in lowered and "cannot" not in lowered
+
+
+def connect_instances(
+    emulator: str, count: int = 1, adb_path: str = "adb", host: str = "127.0.0.1"
+) -> list[str]:
+    """Connect the first `count` instances of a known emulator. Returns serials."""
+    if emulator not in EMULATOR_PORTS:
+        raise AdbError(
+            f"Unknown emulator {emulator!r}. Known: {', '.join(sorted(EMULATOR_PORTS))}"
+        )
+    base, stride = EMULATOR_PORTS[emulator]
+    attached = []
+    for i in range(count):
+        endpoint = f"{host}:{base + i * stride}"
+        if connect(endpoint, adb_path):
+            attached.append(endpoint)
+    return attached

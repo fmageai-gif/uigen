@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .adb import AdbDevice, AdbError, list_devices
+from .adb import EMULATOR_PORTS, AdbDevice, AdbError, connect_instances, list_devices
 from .config import ConfigError, RunConfig, load_flow
 from .flow import Context, run_phase
 from .ocr import Ocr, OcrError, PSM_LINE, PSM_SPARSE
@@ -69,6 +69,30 @@ def cmd_devices(args) -> int:
             print(f"{s:<24} {w}x{h:<8} {model}")
         except AdbError as exc:
             print(f"{s:<24} <error: {exc}>")
+    return 0
+
+
+def cmd_connect(args) -> int:
+    """Attach emulator instances without hunting for their ports by hand."""
+    base, stride = EMULATOR_PORTS[args.emulator]
+    print(
+        f"{args.emulator}: trying {args.instances} instance(s) from port {base} "
+        f"(+{stride} each)"
+    )
+    attached = connect_instances(args.emulator, args.instances, args.adb)
+    if not attached:
+        print(
+            f"\nNothing connected. Check that:\n"
+            f"  - the instances are actually running\n"
+            f"  - ADB is enabled in the emulator's settings\n"
+            f"  - the port matches: MuMu shows it in the Multi-Instance Manager\n"
+            f"    (MuMu 6 and Nebula use 7555 -- try --emulator mumu6)",
+            file=sys.stderr,
+        )
+        return 1
+    for serial in attached:
+        print(f"  connected {serial}")
+    print(f"\n{len(attached)} instance(s) ready. Verify with: swreroll devices")
     return 0
 
 
@@ -329,6 +353,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("devices", help="list connected devices").set_defaults(func=cmd_devices)
+
+    s = sub.add_parser("connect", help="adb-connect emulator instances by name")
+    s.add_argument(
+        "emulator", choices=sorted(EMULATOR_PORTS),
+        help="mumu = MuMu Player 12; mumu6 = MuMu 6 / Nebula",
+    )
+    s.add_argument("-n", "--instances", type=int, default=1)
+    s.set_defaults(func=cmd_connect)
 
     s = sub.add_parser("shot", help="capture a screenshot or cut a template from one")
     s.add_argument("--grid", action="store_true", help="overlay a labelled 100px grid")

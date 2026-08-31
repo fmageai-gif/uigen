@@ -129,15 +129,23 @@ class Runner:
         )
         started = time.monotonic()
         error = ""
+        # `reset` and `wipe` are always protected; a flow can name others that
+        # are simply a waste of time once the account is already worth keeping.
+        skip_on_keep = {"reset", "wipe"} | set(
+            str(n) for n in (self.flow.defaults.get("skip_on_keep") or ())
+        )
         try:
             for phase_name in self.flow.order:
                 if self._stop.is_set():
                     break
                 phase = self.flow.phase(phase_name)
-                # Once a keeper is confirmed, never run the phase that wipes it.
-                if ctx.keep and phase_name in ("reset", "wipe"):
-                    log.info("[%s] keeper found -- skipping %s", device.serial, phase_name)
-                    break
+                # Once a keeper is confirmed, never run the phase that wipes
+                # it -- nor any phase the flow marks as pointless after a hit.
+                if ctx.keep and phase_name in skip_on_keep:
+                    log.info(
+                        "[%s] keeper found -- skipping %s", device.serial, phase_name
+                    )
+                    continue
                 run_phase(ctx, phase)
         except AbortAccount as exc:
             error = f"aborted: {exc}"
