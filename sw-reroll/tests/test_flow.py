@@ -189,6 +189,35 @@ def glyphs():
     return star, light, dark
 
 
+@pytest.fixture
+def five_elements(tmp_path, store):
+    """star + all five element icons, written to the template store."""
+    import cv2
+    rng = np.random.default_rng(555)
+    star = rng.integers(0, 255, (30, 30, 3), dtype=np.uint8)
+    icons = {
+        name: rng.integers(0, 255, (44, 44, 3), dtype=np.uint8)
+        for name in ("light", "dark", "fire", "water", "wind")
+    }
+    cv2.imwrite(str(tmp_path / "ui" / "star.png"), star)
+    for name, img in icons.items():
+        cv2.imwrite(str(tmp_path / "ui" / f"elem_{name}.png"), img)
+    return star, icons
+
+
+FIVE_STEP = {
+    "star_template": "ui/star",
+    "star_region": [0.25, 0.65, 0.50, 0.12],
+    "element_region": [0.35, 0.50, 0.30, 0.15],
+    "elements": {
+        "light": "ui/elem_light", "dark": "ui/elem_dark", "fire": "ui/elem_fire",
+        "water": "ui/elem_water", "wind": "ui/elem_wind",
+    },
+    "keep_elements": ["light", "dark"],
+    "threshold": 0.9,
+}
+
+
 def _result_screen(star, elem, n_stars):
     screen = make_screen()
     for i in range(n_stars):
@@ -240,19 +269,24 @@ def test_a_four_star_is_not_a_keeper(ctx_factory, store, tmp_path, glyphs):
     assert ctx.notes == []  # only nat 5s are worth noting
 
 
-def test_a_nat_five_of_the_wrong_element_is_logged_but_not_kept(
+def test_listing_only_light_and_dark_makes_every_nat5_ambiguous(
     ctx_factory, store, tmp_path, glyphs
 ):
-    """A mystical-scroll nat 5 must be recorded without ending the run."""
+    """Why the shipped flow lists all five elements.
+
+    With only light and dark templates, a fire nat 5 and a broken crop are
+    indistinguishable -- both are "no match". The fail-safe then banks it,
+    which is the safe call but stops the run on a dud. Listing all five
+    elements is what makes a non-LD nat 5 positively identifiable.
+    """
     star, light, dark = glyphs
     _grade_store(tmp_path, star, light, dark)
-    #  Five stars, no light/dark icon anywhere -- i.e. a fire/water/wind nat 5.
     ctx = ctx_factory(FakeDevice([_result_screen(star, None, 5)]))
     run_steps(ctx, steps([{"evaluate_grade": dict(GRADE_STEP)}]))
 
-    assert ctx.keep is False
-    assert ctx.hits == []
-    assert ctx.notes == ["nat5-unknown"]
+    assert ctx.keep is True
+    assert ctx.hits == ["5star-UNVERIFIED"]
+    assert "element-unreadable" in ctx.notes
 
 
 def test_min_stars_is_configurable(ctx_factory, store, tmp_path, glyphs):
@@ -262,3 +296,69 @@ def test_min_stars_is_configurable(ctx_factory, store, tmp_path, glyphs):
     ctx = ctx_factory(FakeDevice([_result_screen(star, dark, 4)]))
     run_steps(ctx, steps([{"evaluate_grade": step}]))
     assert ctx.keep is True
+
+
+# ---- the asymmetric-cost fail-safe ---------------------------------------
+#
+# Banking a dud costs two minutes. Wiping a real LD5 costs the whole run and
+# is silent. These tests pin which way the ambiguous case falls.
+
+def test_a_positively_identified_fire_nat5_is_wiped_not_banked(
+    ctx_factory, five_elements, tmp_path
+):
+    """Fire matched, so we KNOW it is not an LD5 -- safe to reroll past it."""
+    star, icons = five_elements
+    ctx = ctx_factory(FakeDevice([_result_screen(star, icons["fire"], 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(FIVE_STEP)}]))
+
+    assert ctx.keep is False
+    assert ctx.vars["element"] == "fire"
+    assert ctx.notes == ["nat5-fire"]
+
+
+def test_an_unreadable_element_on_a_nat5_is_banked_not_wiped(
+    ctx_factory, five_elements, tmp_path
+):
+    """The failure that would otherwise silently destroy the run."""
+    star, _ = five_elements
+    #  Five stars, no element icon the store recognises at all.
+    ctx = ctx_factory(FakeDevice([_result_screen(star, None, 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(FIVE_STEP)}]))
+
+    assert ctx.keep is True
+    assert ctx.hits == ["5star-UNVERIFIED"]
+    assert "element-unreadable" in ctx.notes
+
+
+def test_unknown_element_can_be_set_to_discard(ctx_factory, five_elements, tmp_path):
+    """Mystical scrolls use this: an unreadable element there is an error."""
+    star, _ = five_elements
+    step = dict(FIVE_STEP, on_unknown_element="discard")
+    ctx = ctx_factory(FakeDevice([_result_screen(star, None, 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": step}]))
+
+    assert ctx.keep is False
+    assert ctx.notes == ["nat5-unknown"]
+
+
+def test_the_fail_safe_does_not_fire_below_the_star_threshold(
+    ctx_factory, five_elements, tmp_path
+):
+    """An unreadable element on a 3-star must not bank the account."""
+    star, _ = five_elements
+    ctx = ctx_factory(FakeDevice([_result_screen(star, None, 3)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(FIVE_STEP)}]))
+    assert ctx.keep is False
+    assert ctx.hits == []
+
+
+def test_a_dark_nat5_still_banks_normally_with_five_elements(
+    ctx_factory, five_elements, tmp_path
+):
+    star, icons = five_elements
+    ctx = ctx_factory(FakeDevice([_result_screen(star, icons["dark"], 5)]))
+    run_steps(ctx, steps([{"evaluate_grade": dict(FIVE_STEP)}]))
+
+    assert ctx.keep is True
+    assert ctx.hits == ["5star-dark"]
+    assert ctx.vars["element_score"] > 0.9

@@ -37,15 +37,37 @@ depends on OCR reading a stylised name correctly.
 - evaluate_grade:
     star_region: [0.30, 0.70, 0.40, 0.09]
     min_stars: 5
-    elements: {light: ui/elem_light, dark: ui/elem_dark}
+    elements:
+      light: ui/elem_light
+      dark:  ui/elem_dark
+      fire:  ui/elem_fire     # list all five, see below
+      water: ui/elem_water
+      wind:  ui/elem_wind
     keep_elements: [light, dark]
+    on_unknown_element: keep
 ```
 
-Three small templates total — one star, two element icons — and you are done.
+**Only an LD5 stops the run.** A fire/water/wind nat 5 is recorded as a note
+and the reroll continues, so `swreroll stats` shows what the mystical scrolls
+are actually buying without ever ending a run on a monster you didn't want.
 
-A nat 5 that *isn't* a keeper (a fire/water/wind pull from a mystical scroll)
-is recorded as a note rather than a keep, so `swreroll stats` shows what those
-extra minutes are actually buying.
+### The asymmetry that shapes this
+
+The two mistakes cost wildly different amounts:
+
+- Banking a dud → two minutes of manual checking.
+- Wiping a real LD5 → the entire run, **silently**. You'd grind 500 accounts,
+  hit nothing, and never learn why.
+
+So two rules follow. **List all five elements, not just light and dark.**
+Identifying fire *positively* is what lets the bot wipe a fire nat 5 with
+confidence; with only light/dark templates, "a fire monster" and "my crop is
+broken" are the same observation. And **`on_unknown_element: keep`** — a nat 5
+whose element can't be read at all is banked, flagged `UNVERIFIED`, and
+screenshotted for you to check by hand.
+
+If `UNVERIFIED` shows up more than rarely, element detection is broken and
+real LD5s are at risk — recut the icons before running overnight.
 
 **By name (OCR).** For a specific shortlist rather than any LD5. Tesseract
 reads the monster's name and fuzzy-matches it against a wanted list — fuzzy
@@ -162,8 +184,13 @@ region in the first place.
 
 ```bash
 swreroll shot --crop 512,505,30,30 --out templates/ui/star.png
+# The element icon sits in the same spot every time; cut one per element as
+# you happen to summon them. All five, not just light and dark.
 swreroll shot --crop 592,412,44,44 --out templates/ui/elem_light.png
 swreroll shot --crop 592,412,44,44 --out templates/ui/elem_dark.png
+swreroll shot --crop 592,412,44,44 --out templates/ui/elem_fire.png
+swreroll shot --crop 592,412,44,44 --out templates/ui/elem_water.png
+swreroll shot --crop 592,412,44,44 --out templates/ui/elem_wind.png
 ```
 
 Then verify the count on a known result screen — five stars must read as
@@ -298,7 +325,7 @@ swreroll/
   cli.py      connect / devices / shot / check / ocr / phase / run / stats
 flows/        the reroll script (edit this)
 templates/    your captured crops (not committed)
-tests/        89 tests, no emulator required
+tests/        94 tests, no emulator required
 ```
 
 ```bash

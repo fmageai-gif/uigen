@@ -24,10 +24,17 @@ Grade detection needs only these, and they decide every keep:
 - `ui/star` — **one** star glyph, cut tight, with no neighbouring star in the
   crop. `find_all` counts occurrences, so a loose crop that swallows part of
   the next star will miscount.
-- `ui/elem_light`, `ui/elem_dark` — the element icons on the result panel.
-  Cut them from the same spot on the same panel so they are directly
-  comparable; if light and dark score similarly on the same screen, tighten
-  both crops until they don't.
+- `ui/elem_light`, `ui/elem_dark`, `ui/elem_fire`, `ui/elem_water`,
+  `ui/elem_wind` — the element icons. Cut all five from the same spot on the
+  result panel so they are directly comparable.
+
+  Capturing fire/water/wind is not optional busywork: identifying them
+  positively is what lets the bot discard a non-LD nat 5 with confidence.
+  With only light and dark, "this is a fire monster" and "my crop is broken"
+  produce the same result, and the fail-safe then banks every nat 5.
+
+  If two element icons score similarly on the same screen, tighten both crops
+  until they don't.
 
 ## Names the shipped flow expects
 

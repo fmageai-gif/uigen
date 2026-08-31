@@ -372,10 +372,16 @@ def _act_evaluate(ctx: Context, step: Step) -> None:
 def _act_evaluate_grade(ctx: Context, step: Step) -> None:
     """Keeper check by natural grade and element, not by name.
 
-    For "any LD nat 5" this is strictly better than a name roster: it counts
-    the star glyphs and reads the element icon, so it keeps working when
-    Com2uS releases a Light/Dark monster nobody has heard of yet, and it never
-    depends on OCR reading a stylised name correctly.
+    For "any LD nat 5" this beats a name roster: it counts the star glyphs and
+    reads the element icon, so it keeps working when Com2uS releases a
+    Light/Dark monster nobody has heard of yet, and it never stakes the run on
+    OCR reading a stylised name correctly.
+
+    The two mistakes here are not equally expensive. Banking a junk account
+    costs two minutes of manual checking. Wiping a real LD5 costs the entire
+    run and, worse, is silent -- you would grind hundreds of accounts and
+    never learn why nothing hit. So when the element cannot be identified at
+    all, this fails towards keeping.
     """
     star = str(step.get("star_template", "ui/star"))
     min_stars = int(step.get("min_stars", 5))
@@ -397,35 +403,63 @@ def _act_evaluate_grade(ctx: Context, step: Step) -> None:
     if elem_region is not None:
         elem_region = tuple(float(v) for v in elem_region)
 
-    element = None
-    if elements:
-        best_score = 0.0
-        for label, tpl in elements.items():
-            m = ctx.store.find(screen, str(tpl), threshold=threshold, region=elem_region)
-            if m.found and m.score > best_score:
-                element, best_score = str(label), m.score
+    # Identify the element positively. Listing all five (not just light and
+    # dark) is what turns "no match" from the common case into a real signal:
+    # if fire matched, we KNOW it is not an LD5 and can wipe with confidence.
+    element, best_score = None, 0.0
+    for label, tpl in elements.items():
+        m = ctx.store.find(screen, str(tpl), threshold=threshold, region=elem_region)
+        if m.found and m.score > best_score:
+            element, best_score = str(label), m.score
     ctx.vars["element"] = element
+    ctx.vars["element_score"] = round(best_score, 3)
 
     keep_elements = [str(e) for e in (step.get("keep_elements") or [])]
-    log.info("grade: %d stars, element=%s", count, element)
-
     ok_stars = count >= min_stars
-    ok_element = (not keep_elements) or (element in keep_elements)
+    log.info("grade: %d stars, element=%s (%.2f)", count, element, best_score)
 
-    if ok_stars and ok_element:
-        ctx.keep = True
+    # --- keeper ----------------------------------------------------------
+    if ok_stars and (not keep_elements or element in keep_elements):
         tag = f"{count}star-{element or 'unknown'}"
+        ctx.keep = True
         ctx.hits.append(tag)
         log.warning("KEEPER by grade: %s", tag)
         ctx.save_shot("KEEP")
         return
 
-    # A nat 5 that is not a keeper is still worth recording -- it is the only
-    # way to know whether the mystical scrolls are earning their time.
+    # --- ambiguous: right grade, but the element could not be read --------
+    if ok_stars and element is None and keep_elements:
+        unknown = str(step.get("on_unknown_element", "keep")).lower()
+        if unknown == "keep":
+            ctx.keep = True
+            ctx.hits.append(f"{count}star-UNVERIFIED")
+            ctx.notes.append("element-unreadable")
+            log.warning(
+                "nat %d with an UNREADABLE element -- banking it rather than "
+                "risking a wipe. Check the KEEP screenshot by hand, then fix "
+                "element_region / the element templates: if this fires often, "
+                "element detection is broken and real LD5s are at risk.",
+                count,
+            )
+            ctx.save_shot("KEEP-unverified")
+            return
+        log.warning(
+            "nat %d with an unreadable element, discarding per "
+            "on_unknown_element=discard", count,
+        )
+
+    # --- not a keeper ----------------------------------------------------
+    # A nat 5 of the wrong element is still worth recording: it is the only
+    # way to see whether the mystical scrolls are earning their time.
     if ok_stars:
         ctx.notes.append(f"nat{count}-{element or 'unknown'}")
         if step.get("save_notable"):
             ctx.save_shot(f"nat{count}-{element or 'unknown'}")
+    elif element in keep_elements and step.get("save_notable"):
+        # A light/dark monster below the star threshold. Almost always a
+        # legitimate LD 3/4-star, but it is also exactly what a miscounted
+        # LD5 looks like, so keep an audit trail.
+        ctx.save_shot(f"ld-{count}star")
     elif step.get("save_misses"):
         ctx.save_shot("miss")
 

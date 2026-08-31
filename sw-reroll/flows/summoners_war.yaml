@@ -147,10 +147,21 @@ phases:
                 star_region: [0.30, 0.70, 0.40, 0.09]
                 min_stars: 5
                 element_region: [0.44, 0.55, 0.12, 0.10]
+                # List ALL FIVE, not just light and dark. Identifying fire
+                # positively is what lets the bot wipe a fire nat 5 with
+                # confidence -- otherwise "no match" and "not LD" look the
+                # same, and a bad crop silently throws away real LD5s.
                 elements:
                   light: ui/elem_light
                   dark: ui/elem_dark
+                  fire: ui/elem_fire
+                  water: ui/elem_water
+                  wind: ui/elem_wind
                 keep_elements: [light, dark]
+                # A nat 5 whose element cannot be read at all is banked, not
+                # wiped. Banking a dud costs two minutes; wiping an LD5 costs
+                # the run. Set to `discard` only once you trust your crops.
+                on_unknown_element: keep
                 threshold: 0.86
                 save_notable: true
             - tap: {at: [0.5, 0.92]}     # dismiss the result panel
@@ -187,9 +198,15 @@ phases:
                 elements:
                   light: ui/elem_light
                   dark: ui/elem_dark
-                # Mystical scrolls cannot roll light or dark, so this keeps
-                # nothing -- it records the nat 5s for the stats only.
+                  fire: ui/elem_fire
+                  water: ui/elem_water
+                  wind: ui/elem_wind
+                # Mystical scrolls cannot roll light or dark, so a nat 5 here
+                # is recorded and the reroll CONTINUES -- only an LD5 stops
+                # the run. `discard` on unknown because a mystical pull that
+                # reads as light/dark is a detection error, not a jackpot.
                 keep_elements: [light, dark]
+                on_unknown_element: discard
                 threshold: 0.86
                 save_notable: true
             - tap: {at: [0.5, 0.92]}
