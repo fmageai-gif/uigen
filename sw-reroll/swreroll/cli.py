@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 from .adb import EMULATOR_PORTS, AdbDevice, AdbError, connect_instances, list_devices
+from . import capture
 from .config import ConfigError, RunConfig, load_flow
 from .flow import Context, run_phase
 from .ocr import Ocr, OcrError, PSM_LINE, PSM_SPARSE
@@ -65,8 +66,9 @@ def cmd_devices(args) -> int:
         try:
             dev = AdbDevice(serial=s, adb_path=args.adb)
             w, h = dev.screen_size()
+            dpi = dev.screen_density()
             model = dev.shell("getprop", "ro.product.model").strip()
-            print(f"{s:<24} {w}x{h:<8} {model}")
+            print(f"{s:<24} {w}x{h:<10} {str(dpi) + ' dpi':<9} {model}")
         except AdbError as exc:
             print(f"{s:<24} <error: {exc}>")
     return 0
@@ -96,10 +98,28 @@ def cmd_connect(args) -> int:
     return 0
 
 
+def _record_geometry(dev: AdbDevice, templates_dir) -> capture.Geometry:
+    """Stamp what the templates were cut at, so drift can be detected later."""
+    w, h = dev.screen_size()
+    geom = capture.Geometry(width=w, height=h, density=dev.screen_density())
+    existing = capture.load(templates_dir)
+    if existing and not existing.matches(geom):
+        print(
+            f"WARNING: templates were captured at {existing}, this device is "
+            f"{geom}.\n         Cutting new crops here will mix two geometries "
+            f"in one folder.",
+            file=sys.stderr,
+        )
+    else:
+        capture.save(templates_dir, geom)
+    return geom
+
+
 def cmd_shot(args) -> int:
     serial = (args.device or _pick_serials(args))[0]
     dev = AdbDevice(serial=serial, adb_path=args.adb)
     img = dev.screencap()
+    geom = _record_geometry(dev, args.templates)
 
     if args.crop:
         try:
@@ -114,6 +134,7 @@ def cmd_shot(args) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(out), crop)
         print(f"template written: {out}  ({crop.shape[1]}x{crop.shape[0]})")
+        print(f"captured at: {geom}")
         return 0
 
     out = Path(args.out)
@@ -121,7 +142,7 @@ def cmd_shot(args) -> int:
     if args.grid:
         img = _draw_grid(img)
     cv2.imwrite(str(out), img)
-    print(f"screenshot: {out}  ({img.shape[1]}x{img.shape[0]})")
+    print(f"screenshot: {out}  ({img.shape[1]}x{img.shape[0]})  [{geom}]")
     if args.grid:
         print("Grid labels are reference-width pixels -- feed them straight to --crop.")
     return 0
@@ -278,6 +299,21 @@ def cmd_run(args) -> int:
         ", ".join(keepers) or "-",
     )
 
+    recorded = capture.load(templates)
+    if recorded and not args.ignore_geometry:
+        for serial in _pick_serials(args):
+            dev = AdbDevice(serial=serial, adb_path=args.adb)
+            w, h = dev.screen_size()
+            actual = capture.Geometry(w, h, dev.screen_density())
+            if not recorded.matches(actual):
+                raise SystemExit(capture.describe_mismatch(recorded, actual, serial))
+        log.info("display matches templates: %s", recorded)
+    elif not recorded:
+        log.warning(
+            "no %s in %s -- capture templates with `swreroll shot` so display "
+            "drift can be detected", capture.MANIFEST, templates,
+        )
+
     cfg = RunConfig(
         flow_path=Path(args.flow),
         templates_dir=templates,
@@ -409,6 +445,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--timeout", type=float, default=45.0)
     s.add_argument("--dry-run", action="store_true", help="no input is sent to the device")
     s.add_argument("--no-shots", action="store_true")
+    s.add_argument(
+        "--ignore-geometry",
+        action="store_true",
+        help="run even if the display no longer matches what templates were cut at",
+    )
     s.set_defaults(func=cmd_run)
 
     s = sub.add_parser("stats", help="summarise a run directory")

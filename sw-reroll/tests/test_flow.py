@@ -362,3 +362,144 @@ def test_a_dark_nat5_still_banks_normally_with_five_elements(
     assert ctx.keep is True
     assert ctx.hits == ["5star-dark"]
     assert ctx.vars["element_score"] > 0.9
+
+
+def test_tap_through_cycles_candidate_points(ctx_factory, badge):
+    """The tutorial only accepts taps on what it is highlighting, so a single
+    fixed point stalls on the scripted battle turns."""
+    screens = [make_screen()] * 6 + [stamp(make_screen(), badge, 100, 100)]
+    dev = FakeDevice(screens)
+    ctx = ctx_factory(dev, step_timeout=5.0)
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge",
+            "points": [[0.5, 0.85], [0.33, 0.31], [0.75, 0.91]],
+            "interval": 0.01,
+        }
+    }]))
+    #  It must have visited more than one candidate, in order, wrapping round.
+    assert len(set(dev.taps)) >= 2
+    assert dev.taps[0] == (640, 612)
+    assert dev.taps[1] == (422, 223)
+    if len(dev.taps) > 3:
+        assert dev.taps[3] == dev.taps[0]  # wraps
+
+
+def test_tap_through_still_accepts_a_single_point(ctx_factory, badge):
+    screens = [make_screen()] * 3 + [stamp(make_screen(), badge, 100, 100)]
+    dev = FakeDevice(screens)
+    ctx = ctx_factory(dev, step_timeout=5.0)
+    run_steps(ctx, steps([
+        {"tap_through": {"target": "ui/badge", "at": [0.5, 0.9], "interval": 0.01}}
+    ]))
+    assert set(dev.taps) == {(640, 648)}
+
+
+# ---- arrow-guided tutorial navigation ------------------------------------
+#
+# The game draws a green arrow over what to tap now and a yellow one over what
+# comes next. Following them beats guessing coordinates, and green must always
+# win -- acting on the yellow arrow taps the wrong thing.
+
+@pytest.fixture
+def arrows(tmp_path, store):
+    import cv2
+    rng = np.random.default_rng(808)
+    green = rng.integers(0, 255, (50, 40, 3), dtype=np.uint8)
+    yellow = rng.integers(0, 255, (50, 40, 3), dtype=np.uint8)
+    cv2.imwrite(str(tmp_path / "ui" / "arrow_green.png"), green)
+    cv2.imwrite(str(tmp_path / "ui" / "arrow_yellow.png"), yellow)
+    return green, yellow
+
+
+GUIDES = [
+    {"target": "ui/arrow_green", "offset": [0, 120]},
+    {"target": "ui/arrow_yellow", "offset": [0, 120]},
+]
+
+
+def test_taps_below_the_green_arrow(ctx_factory, arrows, badge):
+    """The arrow floats above its target, so the tap lands offset downward."""
+    green, _ = arrows
+    battle = stamp(make_screen(), green, 400, 140)
+    done = stamp(make_screen(), badge, 50, 50)
+    dev = FakeDevice([battle, done])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge", "guides": GUIDES,
+            "points": [[0.5, 0.85]], "interval": 0.01,
+        }
+    }]))
+    # Arrow centre is (420, 165); the tap must be 120px below it.
+    assert dev.taps == [(420, 285)]
+
+
+def test_green_arrow_wins_over_yellow(ctx_factory, arrows, badge):
+    """Acting on the yellow arrow taps what comes *next* -- the wrong thing."""
+    green, yellow = arrows
+    screen = make_screen()
+    stamp(screen, yellow, 700, 140)
+    stamp(screen, green, 300, 140)
+    dev = FakeDevice([screen, stamp(make_screen(), badge, 50, 50)])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge", "guides": GUIDES,
+            "points": [[0.5, 0.85]], "interval": 0.01,
+        }
+    }]))
+    assert dev.taps == [(320, 285)]  # green at x=300, not yellow at x=700
+
+
+def test_falls_back_to_yellow_when_no_green_arrow(ctx_factory, arrows, badge):
+    green, yellow = arrows
+    dev = FakeDevice([
+        stamp(make_screen(), yellow, 700, 140),
+        stamp(make_screen(), badge, 50, 50),
+    ])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge", "guides": GUIDES,
+            "points": [[0.5, 0.85]], "interval": 0.01,
+        }
+    }]))
+    assert dev.taps == [(720, 285)]
+
+
+def test_falls_back_to_points_during_plain_dialogue(ctx_factory, arrows, badge):
+    """No arrow is drawn for dialogue -- a tap anywhere continues."""
+    dev = FakeDevice([make_screen(), stamp(make_screen(), badge, 50, 50)])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge", "guides": GUIDES,
+            "points": [[0.5, 0.85]], "interval": 0.01,
+        }
+    }]))
+    assert dev.taps == [(640, 612)]
+
+
+def test_guides_are_skipped_when_their_templates_are_missing(ctx_factory, badge):
+    """Not having captured the arrows yet must not break the run."""
+    dev = FakeDevice([make_screen(), stamp(make_screen(), badge, 50, 50)])
+    ctx = ctx_factory(dev, step_timeout=5.0)
+    run_steps(ctx, steps([{
+        "tap_through": {
+            "target": "ui/badge",
+            "guides": [{"target": "ui/arrow_green", "offset": [0, 120]}],
+            "points": [[0.5, 0.85]], "interval": 0.01,
+        }
+    }]))
+    assert dev.taps == [(640, 612)]
+
+
+def test_a_guide_entry_without_a_target_is_rejected(ctx_factory):
+    ctx = ctx_factory(FakeDevice())
+    with pytest.raises(ConfigError, match="guide entries need a 'target'"):
+        run_steps(ctx, steps([{
+            "tap_through": {"target": "ui/badge", "guides": [{"offset": [0, 1]}]}
+        }]))

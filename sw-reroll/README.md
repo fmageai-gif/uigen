@@ -269,7 +269,7 @@ Com2uS reshuffles a menu.
 |---|---|
 | `tap` | Tap a template once visible, or a fixed point |
 | `tap_text` | OCR-locate a word and tap its box — no template needed |
-| `tap_through` | Hammer a point until a target screen appears (tutorial skipper) |
+| `tap_through` | Advance a scripted sequence — follows the tutorial's own guide arrows, falls back to sweeping points |
 | `wait_for` / `wait_gone` | Block until a template appears / disappears |
 | `wait_for_text` | Block until a phrase is legible |
 | `dismiss` | Close every popup matching `templates/close/`, repeatedly |
@@ -293,6 +293,13 @@ Three conventions worth internalising:
 
 Prefer `tap_text` over `tap`. Text buttons — Summon, Confirm, Skip, Next, OK —
 need no captured images at all, which is most of what a tutorial skip clicks.
+
+**In the tutorial, follow the arrows.** The opening is on rails: the game
+accepts a tap only on what it is currently highlighting, and it marks that with
+a green arrow (yellow marks what comes next). `tap_through` takes a `guides:`
+list and taps below whichever it finds, green first, falling back to fixed
+points only for plain dialogue where a tap anywhere continues. This is why the
+tutorial phase does not need a coordinate for every battle turn.
 
 ### Reliability
 
@@ -325,7 +332,7 @@ swreroll/
   cli.py      connect / devices / shot / check / ocr / phase / run / stats
 flows/        the reroll script (edit this)
 templates/    your captured crops (not committed)
-tests/        94 tests, no emulator required
+tests/        102 tests, no emulator required
 ```
 
 ```bash

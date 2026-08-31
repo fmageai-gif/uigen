@@ -36,6 +36,22 @@ Grade detection needs only these, and they decide every keep:
   If two element icons score similarly on the same screen, tighten both crops
   until they don't.
 
+## The tutorial guide arrows
+
+The game tells you what to tap: a **green arrow** floats over the thing to tap
+now, a **yellow arrow** over what comes next. The flow follows them, which is
+far more robust than guessing battle coordinates.
+
+- `ui/arrow_green` — cut the arrow head only, no background, no monster
+- `ui/arrow_yellow` — same
+
+Both are solid flat colours with a distinct silhouette, so they match reliably.
+Cut them tight: including sky or terrain behind the arrow makes the crop
+scene-specific and it will stop matching on the next tutorial stage.
+
+If you skip these, the flow falls back to sweeping fixed points and will very
+likely stall on the scripted battle turns.
+
 ## Names the shipped flow expects
 
 - `ui/title` — the title / "Touch to Start" screen

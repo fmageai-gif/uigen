@@ -140,6 +140,13 @@ class AdbDevice:
         self._size = (int(m.group(1)), int(m.group(2)))
         return self._size
 
+    def screen_density(self) -> int | None:
+        """Physical DPI. Changing this reflows the game UI even when the
+        resolution is unchanged, which silently invalidates every template."""
+        out = self.shell("wm", "density")
+        m = re.search(r"(?:Override|Physical) density:\s*(\d+)", out)
+        return int(m.group(1)) if m else None
+
     def screencap(self) -> np.ndarray:
         """Grab the framebuffer as a BGR ndarray."""
         if self.dry_run:

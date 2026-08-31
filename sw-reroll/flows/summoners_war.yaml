@@ -70,15 +70,36 @@ phases:
       - note: {text: "tutorial"}
       # Each tap_through stops the moment it can see the next real screen,
       # rather than sleeping a fixed number of seconds.
+      # The opening is ON RAILS: the game accepts a tap only on whatever it
+      # is currently highlighting -- and it TELLS YOU WHAT THAT IS. A green
+      # arrow marks the thing to tap now; a yellow one marks what comes next.
+      #
+      # So follow the arrows instead of guessing coordinates. Green is listed
+      # first, so the bot always acts on the current instruction rather than
+      # the upcoming one. The fallback `points` only run when no arrow is on
+      # screen, which is the plain-dialogue case where a tap anywhere works.
+      #
+      # The arrow floats above its target's head, hence the downward offset --
+      # tune it so the tap lands on the monster's body, not the arrow.
       - tap_through:
           targets: [ui/summon_altar, ui/battle_start]
-          at: [0.5, 0.85]
+          guides:
+            - {target: ui/arrow_green,  offset: [0, 120]}
+            - {target: ui/arrow_yellow, offset: [0, 120]}
+          points:
+            - [0.50, 0.85]    # dialogue box -- advances any "tap to continue"
+            - [0.75, 0.91]    # first skill button
           interval: 0.9
           timeout: 240
       - tap_text: {text: "Start", optional: true, timeout: 15}
       - tap_through:
           targets: [ui/home]
-          at: [0.5, 0.85]
+          guides:
+            - {target: ui/arrow_green,  offset: [0, 120]}
+            - {target: ui/arrow_yellow, offset: [0, 120]}
+          points:
+            - [0.50, 0.85]
+            - [0.75, 0.91]
           interval: 0.9
           timeout: 300
 

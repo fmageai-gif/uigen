@@ -217,38 +217,107 @@ def _act_wait_gone(ctx: Context, step: Step) -> None:
         raise StepTimeout(f"{names} still on screen after {timeout:.0f}s")
 
 
+def _parse_guides(step: Step) -> list[dict[str, Any]]:
+    """Normalise the `guides:` list into {name, offset, threshold} dicts."""
+    guides = []
+    for raw in step.get("guides") or []:
+        if isinstance(raw, str):
+            raw = {"target": raw}
+        if not isinstance(raw, dict) or "target" not in raw:
+            raise ConfigError(f"guide entries need a 'target', got {raw!r}")
+        offset = raw.get("offset") or [0, 0]
+        guides.append({
+            "name": str(raw["target"]),
+            "offset": (int(offset[0]), int(offset[1])),
+            "threshold": raw.get("threshold"),
+        })
+    return guides
+
+
 @action("tap_through")
 def _act_tap_through(ctx: Context, step: Step) -> None:
-    """Hammer a point until an expected screen appears.
+    """Advance a scripted sequence until an expected screen appears.
 
-    This is the tutorial-skipper. Cutscenes, dialogue boxes and 'tap to
-    continue' prompts all fall to the same treatment, and unlike a fixed
-    sleep it exits the moment the target screen is actually up.
+    The Summoners War opening is on rails: it accepts a tap only on whatever
+    it is currently highlighting. Rather than guess where that is, follow the
+    game's own instruction -- it draws a green arrow over the thing you must
+    tap next, and a yellow one over the thing after that.
+
+    So each iteration goes, in order:
+
+      1. Is the destination screen up?           -> done
+      2. Is a guide arrow visible?               -> tap below it
+      3. Otherwise                               -> next fallback point
+
+    Guides are tried in the order given, so listing green before yellow makes
+    the bot always act on the current instruction rather than the upcoming
+    one. The fallback points still cover plain dialogue, where no arrow is
+    drawn because a tap anywhere continues.
     """
     names = _targets(step)
     if not names:
         raise ConfigError("tap_through needs 'target'/'targets' to stop on")
-    point = step.get("at") or [0.5, 0.85]
-    x, y = _resolve_point(ctx, point)
+
+    guides = _parse_guides(step)
+    raw_points = step.get("points")
+    if raw_points:
+        points = [_resolve_point(ctx, pt) for pt in raw_points]
+    else:
+        points = [_resolve_point(ctx, step.get("at") or [0.5, 0.85])]
+
     timeout = float(step.get("timeout", ctx.step_timeout))
     interval = float(step.get("interval", 0.8))
+    guide_region = _region(step)
     deadline = time.monotonic() + timeout
     best = Match(found=False, score=0.0)
+    taps = guided = swept = 0
 
     while time.monotonic() < deadline:
-        name, match = _look(ctx, step, names)
+        screen = ctx.screen()
+
+        # 1. Are we there yet?
+        name, match = ctx.store.find_any(
+            screen, names, threshold=_threshold(ctx, step), region=guide_region
+        )
         if match.found and name:
-            log.debug("tap_through reached %s", name)
+            log.debug(
+                "tap_through reached %s after %d taps (%d guided)", name, taps, guided
+            )
             return
         best = match if match.score > best.score else best
-        ctx.device.tap(x, y)
+
+        # 2. Follow the game's own pointer if it is drawing one.
+        acted = False
+        for guide in guides:
+            if not ctx.store.has(guide["name"]):
+                continue
+            g = ctx.store.find(
+                screen,
+                guide["name"],
+                threshold=float(guide["threshold"] or _threshold(ctx, step)),
+            )
+            if g.found:
+                dx, dy = guide["offset"]
+                ctx.device.tap(g.center[0] + dx, g.center[1] + dy)
+                log.debug("tap_through followed %s at %s", guide["name"], g.center)
+                taps += 1
+                guided += 1
+                acted = True
+                break
+
+        # 3. Nothing pointed at anything -- fall back to the sweep.
+        if not acted:
+            ctx.device.tap(*points[swept % len(points)])
+            swept += 1
+            taps += 1
+
         time.sleep(interval)
 
     if step.get("optional"):
         return
     raise StepTimeout(
-        f"tap_through never reached {names} in {timeout:.0f}s "
-        f"(best score {best.score:.2f})"
+        f"tap_through never reached {names} in {timeout:.0f}s after {taps} taps "
+        f"({guided} guided) (best score {best.score:.2f})"
     )
 
 
